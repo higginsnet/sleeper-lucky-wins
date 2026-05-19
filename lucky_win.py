@@ -171,22 +171,23 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     # An unlucky loss = loss where both teams scored above avg AND opp beat
     #   team relative to avg (Q1, above diagonal: opp_rel > score_rel, both > 0)
     def _lucky_summary(fdf):
-        x, y = "score_rel_avg", "opp_rel_avg"
-        lucky   = fdf[(fdf[x] < 0) & (fdf[y] < 0) & (fdf[x] > fdf[y]) &  fdf["win"]]
-        unlucky = fdf[(fdf[x] > 0) & (fdf[y] > 0) & (fdf[y] > fdf[x]) & ~fdf["win"]]
-        if lucky.empty:
-            luckiest, n_l = "N/A", 0
-        else:
-            c = lucky.groupby("team").size(); luckiest, n_l = c.idxmax(), int(c.max())
-        if unlucky.empty:
-            unluckiest, n_u = "N/A", 0
-        else:
-            c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
-        return (
-            f"<b>Luckiest Team:</b> {luckiest} ({n_l} lucky wins)"
-            f"    |    "
-            f"<b>Unluckiest Team:</b> {unluckiest} ({n_u} unlucky losses)"
-        )
+        lines = []
+        for label, xc, yc in [
+            ("Avg",    "score_rel_avg", "opp_rel_avg"),
+            ("Median", "score_rel_med", "opp_rel_med"),
+        ]:
+            lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
+            unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
+            if lucky.empty:   luckiest,   n_l = "N/A", 0
+            else: c = lucky.groupby("team").size();   luckiest,   n_l = c.idxmax(), int(c.max())
+            if unlucky.empty: unluckiest, n_u = "N/A", 0
+            else: c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
+            lines.append(
+                f"<b>{label}</b> — "
+                f"Luckiest: {luckiest} ({n_l})  ·  "
+                f"Unluckiest: {unluckiest} ({n_u})"
+            )
+        return "<br>".join(lines)
 
     seasons = ["All"] + sorted(df["season"].unique().tolist())
     summary_texts = {
@@ -311,17 +312,17 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     existing_annots = list(fig.layout.annotations)
     label_annots = [
         dict(text="<b>Season</b>", xref="paper", yref="paper",
-             x=0.0, y=1.19, xanchor="left", yanchor="bottom",
+             x=0.0, y=1.17, xanchor="left", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
         dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
-             x=1.0, y=1.19, xanchor="right", yanchor="bottom",
+             x=1.0, y=1.17, xanchor="right", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
     ]
     summary_annot = dict(
         text=summary_texts["All"],
         xref="paper", yref="paper",
-        x=0.5, y=1.025, xanchor="center", yanchor="bottom",
-        showarrow=False, font=dict(size=12, color="#333"),
+        x=0.5, y=1.24, xanchor="center", yanchor="bottom",
+        showarrow=False, font=dict(size=11, color="#333"),
     )
 
     # Set the real index now that all preceding annotation lists are known.
@@ -335,7 +336,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         updatemenus=[
             dict(  # Season filter — top left
                 type="buttons", direction="right",
-                x=0.0, xanchor="left", y=1.14, yanchor="top",
+                x=0.0, xanchor="left", y=1.12, yanchor="top",
                 buttons=year_buttons,
                 showactive=True,
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
@@ -343,7 +344,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
             ),
             dict(  # Benchmark toggle — top right
                 type="buttons", direction="right",
-                x=1.0, xanchor="right", y=1.14, yanchor="top",
+                x=1.0, xanchor="right", y=1.12, yanchor="top",
                 buttons=[
                     dict(label="Weekly Average", method="update",
                          args=[{"visible": _bench_vis(avg_indices)}]),
@@ -365,7 +366,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         height=310 * nrows,
         width=1400,
         template="plotly_white",
-        margin=dict(t=200, b=90),
+        margin=dict(t=250, b=90),
         legend=dict(
             orientation="h", yanchor="top", y=-0.05,
             xanchor="center", x=0.5, font_size=12,
