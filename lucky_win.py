@@ -196,8 +196,8 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     )
     R = max_val  # shorthand used in shapes below
 
-    LUCKY_FILL   = "rgba(173, 198, 245, 0.40)"   # periwinkle blue  — Q3 lower-left
-    UNLUCKY_FILL = "rgba(255, 160, 160, 0.35)"    # light pink-red   — Q1 upper-right
+    LUCKY_FILL   = "rgba(173, 198, 245, 0.40)"   # periwinkle blue — below diagonal
+    UNLUCKY_FILL = "rgba(255, 160, 160, 0.35)"    # light pink-red  — above diagonal
 
     for i in range(len(teams)):
         r, c = divmod(i, ncols)
@@ -205,19 +205,19 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xax = "x" if ax_n == 1 else f"x{ax_n}"
         yax = "y" if ax_n == 1 else f"y{ax_n}"
 
-        # Q3 (lower-left, x<0 y<0): lucky win zone — blue
-        fig.add_shape(type="rect",
-            x0=-R, y0=-R, x1=0, y1=0,
+        # Blue: below the y=x diagonal (triangle: SW corner → diagonal → SE corner)
+        fig.add_shape(type="path",
+            path=f"M {-R},{-R} L {R},{R} L {R},{-R} Z",
             fillcolor=LUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Q1 (upper-right, x>0 y>0): unlucky loss zone — pink
-        fig.add_shape(type="rect",
-            x0=0, y0=0, x1=R, y1=R,
+        # Pink: above the y=x diagonal (triangle: SW corner → diagonal → NW corner)
+        fig.add_shape(type="path",
+            path=f"M {-R},{-R} L {R},{R} L {-R},{R} Z",
             fillcolor=UNLUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Diagonal reference line y = x
+        # Diagonal y = x
         fig.add_shape(type="line",
             x0=-R, y0=-R, x1=R, y1=R,
             line=dict(dash="dash", color="#999", width=1),
@@ -239,8 +239,12 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     # ── Corner watermark annotations (Lucky / Unlucky per subplot) ──────────
     # xref/yref "xN domain" places the annotation at a fraction (0–1) of that
     # subplot's own plot area, independent of the data scale on each axis.
-    LUCKY_TXT   = dict(showarrow=False, font=dict(size=13, color="rgba(31,119,180,0.50)"))
-    UNLUCKY_TXT = dict(showarrow=False, font=dict(size=13, color="rgba(214,39,40,0.50)"))
+    # Both labels sit in the upper-right quadrant (domain x>0.5, y>0.5).
+    # "Unlucky Loss" is above the diagonal (y_domain > x_domain → pink zone).
+    # "Lucky Win"    is below the diagonal (y_domain < x_domain → blue zone).
+    # The same colors bleed into lower-left, making that quadrant self-explanatory.
+    LUCKY_TXT   = dict(showarrow=False, font=dict(size=11, color="rgba(31,119,180,0.60)"))
+    UNLUCKY_TXT = dict(showarrow=False, font=dict(size=11, color="rgba(214,39,40,0.60)"))
     corner_annots = []
     for i in range(len(teams)):
         r, c = divmod(i, ncols)
@@ -248,10 +252,12 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xd = "x domain" if ax_n == 1 else f"x{ax_n} domain"
         yd = "y domain" if ax_n == 1 else f"y{ax_n} domain"
         corner_annots += [
-            dict(**LUCKY_TXT,   xref=xd, yref=yd,
-                 x=0.04, y=0.06, xanchor="left",  yanchor="bottom", text="Lucky"),
+            # Upper-right, above diagonal → pink zone
             dict(**UNLUCKY_TXT, xref=xd, yref=yd,
-                 x=0.96, y=0.94, xanchor="right", yanchor="top",    text="Unlucky"),
+                 x=0.78, y=0.94, xanchor="center", yanchor="top", text="Unlucky<br>Loss"),
+            # Upper-right, below diagonal → blue zone
+            dict(**LUCKY_TXT, xref=xd, yref=yd,
+                 x=0.92, y=0.72, xanchor="center", yanchor="top", text="Lucky<br>Win"),
         ]
 
     # ── Layout: buttons + labels + title ────────────────────────────────────
