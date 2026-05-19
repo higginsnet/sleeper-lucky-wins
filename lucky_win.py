@@ -205,16 +205,28 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xax = "x" if ax_n == 1 else f"x{ax_n}"
         yax = "y" if ax_n == 1 else f"y{ax_n}"
 
-        # Blue: below the y=x diagonal (triangle: SW corner → diagonal → SE corner)
+        # Q1 pink (x>0, y>0, y>x): upper-left triangle of Q1, above diagonal
         fig.add_shape(type="path",
-            path=f"M {-R},{-R} L {R},{R} L {R},{-R} Z",
+            path=f"M 0,0 L 0,{R} L {R},{R} Z",
+            fillcolor=UNLUCKY_FILL, line_width=0,
+            xref=xax, yref=yax, layer="below",
+        )
+        # Q1 blue (x>0, y>0, y<x): lower-right triangle of Q1, below diagonal
+        fig.add_shape(type="path",
+            path=f"M 0,0 L {R},{R} L {R},0 Z",
             fillcolor=LUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Pink: above the y=x diagonal (triangle: SW corner → diagonal → NW corner)
+        # Q3 pink (x<0, y<0, y>x): upper-right triangle of Q3, above diagonal
         fig.add_shape(type="path",
-            path=f"M {-R},{-R} L {R},{R} L {-R},{R} Z",
+            path=f"M 0,0 L {-R},0 L {-R},{-R} Z",
             fillcolor=UNLUCKY_FILL, line_width=0,
+            xref=xax, yref=yax, layer="below",
+        )
+        # Q3 blue (x<0, y<0, y<x): lower-left triangle of Q3, below diagonal
+        fig.add_shape(type="path",
+            path=f"M 0,0 L 0,{-R} L {-R},{-R} Z",
+            fillcolor=LUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
         # Diagonal y = x
@@ -252,12 +264,12 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xd = "x domain" if ax_n == 1 else f"x{ax_n} domain"
         yd = "y domain" if ax_n == 1 else f"y{ax_n} domain"
         corner_annots += [
-            # Upper-right, above diagonal → pink zone
+            # Centroid of pink triangle in Q1: (R/3, 2R/3) → domain (0.667, 0.833)
             dict(**UNLUCKY_TXT, xref=xd, yref=yd,
-                 x=0.78, y=0.94, xanchor="center", yanchor="top", text="Unlucky<br>Loss"),
-            # Upper-right, below diagonal → blue zone
+                 x=0.667, y=0.833, xanchor="center", yanchor="middle", text="Unlucky<br>Loss"),
+            # Centroid of blue triangle in Q1: (2R/3, R/3) → domain (0.833, 0.667)
             dict(**LUCKY_TXT, xref=xd, yref=yd,
-                 x=0.92, y=0.72, xanchor="center", yanchor="top", text="Lucky<br>Win"),
+                 x=0.833, y=0.667, xanchor="center", yanchor="middle", text="Lucky<br>Win"),
         ]
 
     # ── Layout: buttons + labels + title ────────────────────────────────────
