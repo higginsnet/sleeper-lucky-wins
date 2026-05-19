@@ -165,12 +165,43 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         show_set = set(show_indices)
         return ["legendonly"] * N_ANCHORS + [i in show_set for i in range(N_ANCHORS, total)]
 
-    # ── Year restyle args ────────────────────────────────────────────────────
-    # Restyling x/y/hovertext is independent of the benchmark visibility toggle,
-    # so the two controls compose correctly without knowing each other's state.
-    def _year_restyle(season_filter):
+    # ── Lucky / Unlucky summary ──────────────────────────────────────────────
+    # A lucky win  = win where both teams scored below avg AND team beat opp
+    #   relative to avg (Q3, below diagonal: score_rel > opp_rel, both < 0)
+    # An unlucky loss = loss where both teams scored above avg AND opp beat
+    #   team relative to avg (Q1, above diagonal: opp_rel > score_rel, both > 0)
+    def _lucky_summary(fdf):
+        x, y = "score_rel_avg", "opp_rel_avg"
+        lucky   = fdf[(fdf[x] < 0) & (fdf[y] < 0) & (fdf[x] > fdf[y]) &  fdf["win"]]
+        unlucky = fdf[(fdf[x] > 0) & (fdf[y] > 0) & (fdf[y] > fdf[x]) & ~fdf["win"]]
+        if lucky.empty:
+            luckiest, n_l = "N/A", 0
+        else:
+            c = lucky.groupby("team").size(); luckiest, n_l = c.idxmax(), int(c.max())
+        if unlucky.empty:
+            unluckiest, n_u = "N/A", 0
+        else:
+            c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
+        return (
+            f"<b>Luckiest Team:</b> {luckiest} ({n_l} lucky wins)"
+            f"    |    "
+            f"<b>Unluckiest Team:</b> {unluckiest} ({n_u} unlucky losses)"
+        )
+
+    seasons = ["All"] + sorted(df["season"].unique().tolist())
+    summary_texts = {
+        s: _lucky_summary(df if s == "All" else df[df["season"] == s])
+        for s in seasons
+    }
+
+    # ── Year update args (method="update" lets us change traces + annotation) ─
+    # Anchor traces must be included in the trace update with their original
+    # [None] values so we can target all traces without filtering by index.
+    def _year_update(season_filter):
         fdf = df if season_filter == "All" else df[df["season"] == season_filter]
-        xs, ys, hs = [], [], []
+        xs = [[None]] * N_ANCHORS
+        ys = [[None]] * N_ANCHORS
+        hs = [[]] * N_ANCHORS
         for m in trace_meta:
             sub = fdf[
                 (fdf["team"] == m["team"]) &
@@ -180,9 +211,13 @@ def lucky_win_plot(df, output="lucky_wins.html"):
             xs.append(sub[m["x_col"]].tolist())
             ys.append(sub[m["y_col"]].tolist())
             hs.append(_make_hover(sub, m["x_col"], m["y_col"]))
-        return [{"x": xs, "y": ys, "hovertext": hs}, data_range]
+        return [
+            {"x": xs, "y": ys, "hovertext": hs},
+            {f"annotations[{_sidx[0]}].text": summary_texts[season_filter]},
+        ]
 
-    seasons = ["All"] + sorted(df["season"].unique().tolist())
+    # Mutable box so _year_update can reference the index before it is set.
+    _sidx = [None]
 
     # ── Background fills + diagonal + zero-lines (per subplot) ──────────────
     # Shapes use each subplot's own axis reference so coordinates are in data
@@ -272,7 +307,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
                  x=0.833, y=0.667, xanchor="center", yanchor="middle", text="Lucky<br>Win"),
         ]
 
-    # ── Layout: buttons + labels + title ────────────────────────────────────
+    # ── Layout: buttons + labels + summary + title ──────────────────────────
     existing_annots = list(fig.layout.annotations)
     label_annots = [
         dict(text="<b>Season</b>", xref="paper", yref="paper",
@@ -282,14 +317,26 @@ def lucky_win_plot(df, output="lucky_wins.html"):
              x=1.0, y=1.19, xanchor="right", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
     ]
+    summary_annot = dict(
+        text=summary_texts["All"],
+        xref="paper", yref="paper",
+        x=0.5, y=1.025, xanchor="center", yanchor="bottom",
+        showarrow=False, font=dict(size=12, color="#333"),
+    )
+
+    # Set the real index now that all preceding annotation lists are known.
+    _sidx[0] = len(existing_annots) + len(corner_annots) + len(label_annots)
+
+    # Re-build year buttons now that _SUMMARY_IDX is known.
+    year_buttons = [dict(label=str(s), method="update", args=_year_update(s))
+                    for s in seasons]
 
     fig.update_layout(
         updatemenus=[
             dict(  # Season filter — top left
                 type="buttons", direction="right",
                 x=0.0, xanchor="left", y=1.14, yanchor="top",
-                buttons=[dict(label=str(s), method="restyle", args=_year_restyle(s))
-                         for s in seasons],
+                buttons=year_buttons,
                 showactive=True,
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
                 pad={"r": 5, "t": 0},
@@ -307,7 +354,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
             ),
         ],
-        annotations=existing_annots + corner_annots + label_annots,
+        annotations=existing_annots + corner_annots + label_annots + [summary_annot],
         title=dict(
             text=(
                 "Lucky Wins — Pretend GMs Fantasy League<br>"
