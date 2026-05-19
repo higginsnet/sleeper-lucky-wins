@@ -188,9 +188,16 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     # Shapes use each subplot's own axis reference so coordinates are in data
     # space. A large range (±500) safely exceeds any realistic score delta;
     # Plotly clips the fill to the visible axis range automatically.
-    BIG = 500
-    LUCKY_FILL   = "rgba(173, 198, 245, 0.35)"   # periwinkle blue
-    UNLUCKY_FILL = "rgba(255, 160, 160, 0.30)"    # light pink-red
+    # Global symmetric axis range — centers every subplot at zero and prevents
+    # shape coordinates from inflating the auto-range.
+    max_val = (
+        df[["score_rel_avg", "opp_rel_avg", "score_rel_med", "opp_rel_med"]]
+        .abs().values.max() * 1.15
+    )
+    R = max_val  # shorthand used in shapes below
+
+    LUCKY_FILL   = "rgba(173, 198, 245, 0.40)"   # periwinkle blue  — Q3 lower-left
+    UNLUCKY_FILL = "rgba(255, 160, 160, 0.35)"    # light pink-red   — Q1 upper-right
 
     for i in range(len(teams)):
         r, c = divmod(i, ncols)
@@ -198,30 +205,36 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xax = "x" if ax_n == 1 else f"x{ax_n}"
         yax = "y" if ax_n == 1 else f"y{ax_n}"
 
-        # Lucky win zone: below the y = x diagonal
-        fig.add_shape(type="path",
-            path=f"M -{BIG},-{BIG} L {BIG},{BIG} L {BIG},-{BIG} Z",
+        # Q3 (lower-left, x<0 y<0): lucky win zone — blue
+        fig.add_shape(type="rect",
+            x0=-R, y0=-R, x1=0, y1=0,
             fillcolor=LUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Unlucky loss zone: above the y = x diagonal
-        fig.add_shape(type="path",
-            path=f"M -{BIG},-{BIG} L {BIG},{BIG} L -{BIG},{BIG} Z",
+        # Q1 (upper-right, x>0 y>0): unlucky loss zone — pink
+        fig.add_shape(type="rect",
+            x0=0, y0=0, x1=R, y1=R,
             fillcolor=UNLUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Diagonal y = x
+        # Diagonal reference line y = x
         fig.add_shape(type="line",
-            x0=-BIG, y0=-BIG, x1=BIG, y1=BIG,
-            line=dict(dash="dash", color="#888", width=1),
+            x0=-R, y0=-R, x1=R, y1=R,
+            line=dict(dash="dash", color="#999", width=1),
             xref=xax, yref=yax,
         )
         # Zero-lines
         fig.add_hline(y=0, line_dash="dot", line_color="#bbb", line_width=0.8, row=r+1, col=c+1)
         fig.add_vline(x=0, line_dash="dot", line_color="#bbb", line_width=0.8, row=r+1, col=c+1)
 
-    fig.update_xaxes(tickfont_size=8, title_text="Team pts vs benchmark", title_font_size=9, zeroline=False)
-    fig.update_yaxes(tickfont_size=8, title_text="Opp pts vs benchmark",  title_font_size=9, zeroline=False)
+    fig.update_xaxes(
+        tickfont_size=9, title_text="Team pts vs benchmark", title_font_size=9,
+        zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
+    )
+    fig.update_yaxes(
+        tickfont_size=9, title_text="Opp pts vs benchmark", title_font_size=9,
+        zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
+    )
 
     # ── Corner watermark annotations (Lucky / Unlucky per subplot) ──────────
     # xref/yref "xN domain" places the annotation at a fraction (0–1) of that
