@@ -291,35 +291,60 @@ def _build_figure(df, ncols=4):
         ]
 
     # ── Layout: buttons + labels + summary + title ──────────────────────────
+    # All y values above the plot use paper coordinates (y > 1.0 = in the top
+    # margin). We compute them from pixel distances so spacing is physically
+    # consistent regardless of whether this is the 3-row desktop or 6-row
+    # mobile figure.
+    MARGIN_T = 200
+    MARGIN_B = 90
+    fig_h  = 310 * nrows
+    plot_h = fig_h - MARGIN_T - MARGIN_B   # pixel height of the plot area
+
+    def _py(px_from_top):
+        """Map a pixel distance from the figure top → paper y coordinate."""
+        return 1.0 + (MARGIN_T - px_from_top) / plot_h
+
     existing_annots = list(fig.layout.annotations)
+
+    # Title as an annotation so we can place it above y=1 freely.
+    title_annot = dict(
+        text=(
+            "<b>Lucky Wins — Pretend GMs Fantasy League</b><br>"
+            "<sup>Circles = Wins · X = Losses · Blue = Regular Season · Red = Playoffs</sup>"
+        ),
+        xref="paper", yref="paper",
+        x=0.5, y=_py(14), xanchor="center", yanchor="top",
+        showarrow=False, font=dict(size=15),
+    )
     label_annots = [
         dict(text="<b>Season</b>", xref="paper", yref="paper",
-             x=0.0, y=1.17, xanchor="left", yanchor="bottom",
+             x=0.0, y=_py(72), xanchor="left", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
         dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
-             x=1.0, y=1.17, xanchor="right", yanchor="bottom",
+             x=1.0, y=_py(72), xanchor="right", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
     ]
     _summary_base = dict(xref="paper", yref="paper",
-                         x=0.5, y=1.07, xanchor="center", yanchor="bottom",
+                         x=0.5, y=_py(158), xanchor="center", yanchor="bottom",
                          showarrow=False)
     avg_summary_annot = dict(**_summary_base, text=summary_avg_texts["All"],
                              font=dict(size=11, color="#333"))
     med_summary_annot = dict(**_summary_base, text=summary_med_texts["All"],
                              font=dict(size=11, color="rgba(0,0,0,0)"))
 
-    _base_idx = len(existing_annots) + len(corner_annots) + len(label_annots)
+    _base_idx = len(existing_annots) + 1 + len(label_annots)  # +1 for title_annot
     _avg_sidx[0] = _base_idx
     _med_sidx[0] = _base_idx + 1
 
     year_buttons = [dict(label=str(s), method="update", args=_year_update(s))
                     for s in seasons]
 
+    btn_y = _py(96)   # top of buttons, ~24px below the labels
     fig.update_layout(
         updatemenus=[
             dict(
                 type="buttons", direction="right",
-                x=0.0, xanchor="left", y=1.14, yanchor="top",
+                x=0.0, xanchor="left", y=btn_y, yanchor="top",
                 buttons=year_buttons,
                 showactive=True,
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
@@ -327,7 +352,7 @@ def _build_figure(df, ncols=4):
             ),
             dict(
                 type="buttons", direction="right",
-                x=1.0, xanchor="right", y=1.14, yanchor="top",
+                x=1.0, xanchor="right", y=btn_y, yanchor="top",
                 buttons=[
                     dict(label="Weekly Average", method="update",
                          args=[
@@ -350,17 +375,12 @@ def _build_figure(df, ncols=4):
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
             ),
         ],
-        annotations=existing_annots + corner_annots + label_annots + [avg_summary_annot, med_summary_annot],
-        title=dict(
-            text=(
-                "Lucky Wins — Pretend GMs Fantasy League<br>"
-                "<sup>Circles = Wins · X = Losses · Blue = Regular Season · Red = Playoffs</sup>"
-            ),
-            x=0.5, font_size=15,
-        ),
-        height=310 * nrows,
+        annotations=(existing_annots + [title_annot] + label_annots
+                      + [avg_summary_annot, med_summary_annot]),
+        title_text="",   # suppress the built-in title; we use an annotation instead
+        height=fig_h,
         template="plotly_white",
-        margin=dict(t=250, b=90),
+        margin=dict(t=MARGIN_T, b=MARGIN_B),
         legend=dict(
             orientation="h", yanchor="top", y=-0.05,
             xanchor="center", x=0.5, font_size=12,
