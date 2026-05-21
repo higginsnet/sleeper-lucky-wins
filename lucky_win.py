@@ -164,6 +164,9 @@ def _build_figure(df, ncols=4):
         return ["legendonly"] * N_ANCHORS + [i in show_set for i in range(N_ANCHORS, total)]
 
     # ── Lucky / Unlucky summary ──────────────────────────────────────────────
+    # sep: desktop uses " | " (one line), mobile uses "<br>" (two lines).
+    _sep = "<br>" if ncols < 4 else "    |    "
+
     def _lucky_summary(fdf, xc, yc):
         lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
         unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
@@ -173,7 +176,7 @@ def _build_figure(df, ncols=4):
         else: c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
         return (
             f"<b>Luckiest Team:</b> {luckiest} ({n_l} lucky wins)"
-            f"    |    "
+            f"{_sep}"
             f"<b>Unluckiest Team:</b> {unluckiest} ({n_u} unlucky losses)"
         )
 
@@ -297,7 +300,7 @@ def _build_figure(df, ncols=4):
     #
     # Desktop (4 col): buttons sit side-by-side on one row → 200px margin.
     # Mobile  (2 col): buttons stack on two rows → 230px margin to fit.
-    MARGIN_T = 230 if ncols < 4 else 200
+    MARGIN_T = 290 if ncols < 4 else 200
     MARGIN_B = 90
     fig_h  = 310 * nrows
     plot_h = fig_h - MARGIN_T - MARGIN_B
@@ -320,20 +323,20 @@ def _build_figure(df, ncols=4):
     )
 
     if ncols < 4:
-        # ── Mobile: stack Season row, then Benchmark row ──────────────────
+        # ── Mobile: centered labels, stacked button rows, generous spacing ─
         label_annots = [
             dict(text="<b>Season</b>", xref="paper", yref="paper",
-                 x=0.0, y=_py(60), xanchor="left", yanchor="bottom",
+                 x=0.5, y=_py(62), xanchor="center", yanchor="bottom",
                  showarrow=False, font=dict(size=11, color="#444")),
             dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
-                 x=0.0, y=_py(130), xanchor="left", yanchor="bottom",
+                 x=0.5, y=_py(148), xanchor="center", yanchor="bottom",
                  showarrow=False, font=dict(size=11, color="#444")),
         ]
-        season_btn_y = _py(78)
-        bmark_btn_y  = _py(148)
-        summary_y    = _py(198)
-        season_btn_x, season_btn_anchor = 0.0, "left"
-        bmark_btn_x,  bmark_btn_anchor  = 0.0, "left"
+        season_btn_y = _py(80)
+        bmark_btn_y  = _py(166)
+        summary_y    = _py(240)
+        season_btn_x, season_btn_anchor = 0.5, "center"
+        bmark_btn_x,  bmark_btn_anchor  = 0.5, "center"
     else:
         # ── Desktop: Season left, Benchmark right, same row ───────────────
         label_annots = [
