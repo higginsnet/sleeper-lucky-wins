@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sleeper Dynasty Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container {
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 {
+      font-size: 1.6rem;
+      color: #1a1a2e;
+      margin: 0 0 6px;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 0.95rem;
+      margin: 0 0 36px;
+    }
+    .card-grid {
+      display: grid;
+      gap: 18px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 28px 24px;
+      text-decoration: none;
+      color: inherit;
+      transition: box-shadow 0.18s, transform 0.18s;
+      display: block;
+    }
+    .card:hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,0.13);
+      transform: translateY(-2px);
+    }
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin: 0 0 6px;
+    }
+    .card-desc {
+      font-size: 0.875rem;
+      color: #777;
+      margin: 0;
+    }
+    .tag {
+      display: inline-block;
+      background: #eef2ff;
+      color: #4f46e5;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      margin-bottom: 10px;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: 0.78rem;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Dynasty Dashboard</h1>
+    <p class="subtitle">Sleeper fantasy football analytics</p>
+
+    <div class="card-grid">
+      <a class="card" href="lucky_wins_pretend_gms.html">
+        <div class="tag">Lucky Wins</div>
+        <div class="card-title">Pretend GMs</div>
+        <p class="card-desc">Scatter plot showing lucky wins &amp; unlucky losses across every season — who's been carried by fortune?</p>
+      </a>
+
+      <a class="card" href="lucky_wins_on_the_clock.html">
+        <div class="tag">Lucky Wins</div>
+        <div class="card-title">On the Clock</div>
+        <p class="card-desc">Scatter plot showing lucky wins &amp; unlucky losses across every season — who's been carried by fortune?</p>
+      </a>
+    </div>
+
+    <p class="footer">Data via Sleeper API &nbsp;·&nbsp; Updates when regenerated</p>
+  </div>
+</body>
+</html>

@@ -7,19 +7,28 @@ from plotly.subplots import make_subplots
 
 from sleeper_api import get_users, get_rosters, get_matchups
 
-# League chain: oldest → newest
-LEAGUES = [
+# ── League configs ────────────────────────────────────────────────────────────
+# Each entry: oldest season first, newest last.
+LEAGUES_PRETEND_GMS = [
     {"league_id": "1004495314675503104", "season": 2023, "playoff_week_start": 15, "last_scored_leg": 17},
     {"league_id": "1048281198428049408", "season": 2024, "playoff_week_start": 15, "last_scored_leg": 17},
     {"league_id": "1180428546027991040", "season": 2025, "playoff_week_start": 15, "last_scored_leg": 17},
     {"league_id": "1312185578673934336", "season": 2026, "playoff_week_start": 15, "last_scored_leg": 1},
 ]
 
+LEAGUES_ON_THE_CLOCK = [
+    {"league_id": "787161656173146112",  "season": 2022, "playoff_week_start": 15, "last_scored_leg": 17},
+    {"league_id": "917119106866905088",  "season": 2023, "playoff_week_start": 15, "last_scored_leg": 17},
+    {"league_id": "1048284306612903936", "season": 2024, "playoff_week_start": 15, "last_scored_leg": 17},
+    {"league_id": "1180430303260946432", "season": 2025, "playoff_week_start": 15, "last_scored_leg": 17},
+    {"league_id": "1312191361411198976", "season": 2026, "playoff_week_start": 15, "last_scored_leg": 1},
+]
 
-def build_matchup_df():
+
+def build_matchup_df(leagues):
     rows = []
 
-    for league in LEAGUES:
+    for league in leagues:
         league_id = league["league_id"]
         season = league["season"]
         playoff_start = league["playoff_week_start"]
@@ -90,7 +99,7 @@ def _make_hover(subset, x_col, y_col):
     ]
 
 
-def _build_figure(df, ncols=4):
+def _build_figure(df, ncols=4, league_name=""):
     """
     Build the Lucky Win Plotly figure.
     ncols=4 for the desktop layout, ncols=2 for the mobile layout.
@@ -314,7 +323,7 @@ def _build_figure(df, ncols=4):
     # Title as an annotation so we can freely place it above y=1.
     title_annot = dict(
         text=(
-            "<b>Lucky Wins — Pretend GMs Fantasy League</b><br>"
+            f"<b>Lucky Wins — {league_name}</b><br>"
             "<sup>Circles = Wins · X = Losses · Blue = Regular Season · Red = Playoffs</sup>"
         ),
         xref="paper", yref="paper",
@@ -421,11 +430,11 @@ def _build_figure(df, ncols=4):
     return fig
 
 
-def lucky_win_plot(df, output="lucky_wins.html"):
+def lucky_win_plot(df, output="lucky_wins.html", league_name=""):
     print("  Building desktop layout (4 columns)...")
-    desktop_fig = _build_figure(df, ncols=4)
+    desktop_fig = _build_figure(df, ncols=4, league_name=league_name)
     print("  Building mobile layout (2 columns)...")
-    mobile_fig = _build_figure(df, ncols=2)
+    mobile_fig = _build_figure(df, ncols=2, league_name=league_name)
 
     kw = dict(full_html=False, include_plotlyjs=False, config={"responsive": True})
     desktop_div = desktop_fig.to_html(**kw)
@@ -436,7 +445,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lucky Wins — Pretend GMs</title>
+  <title>Lucky Wins — {league_name}</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     * {{ box-sizing: border-box; }}
@@ -473,8 +482,6 @@ def lucky_win_plot(df, output="lucky_wins.html"):
 
 
 if __name__ == "__main__":
-    print("Fetching matchup data from Sleeper API...")
-    df = build_matchup_df()
-    print(f"Loaded {len(df)} matchup records across seasons: {sorted(df['season'].unique())}")
-    print("Building plot...")
-    lucky_win_plot(df)
+    # Run both leagues when executed directly — same as build_all.py
+    import build_all
+    build_all.main(open_browser=True)
