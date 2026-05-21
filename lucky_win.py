@@ -90,15 +90,19 @@ def _make_hover(subset, x_col, y_col):
     ]
 
 
-def lucky_win_plot(df, output="lucky_wins.html"):
+def _build_figure(df, ncols=4):
+    """
+    Build the Lucky Win Plotly figure.
+    ncols=4 for the desktop layout, ncols=2 for the mobile layout.
+    """
     teams = sorted(df["team"].unique())
-    ncols = 4
     nrows = -(-len(teams) // ncols)
+    h_spacing = 0.07 if ncols >= 4 else 0.12
 
     fig = make_subplots(
         rows=nrows, cols=ncols,
         subplot_titles=teams,
-        horizontal_spacing=0.07,
+        horizontal_spacing=h_spacing,
         vertical_spacing=0.10,
     )
 
@@ -111,9 +115,6 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     ]
 
     # ── Permanent legend anchors ─────────────────────────────────────────────
-    # visible="legendonly" means they appear in the legend but don't plot data.
-    # Because they never hide, the legend stays visible no matter which
-    # data traces the toggles show or conceal.
     for is_playoff, win, color, symbol, label in STYLES:
         fig.add_trace(go.Scatter(
             x=[None], y=[None], mode="markers",
@@ -125,7 +126,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     N_ANCHORS = len(STYLES)  # 4
 
     # ── Data traces ──────────────────────────────────────────────────────────
-    trace_meta = []   # one entry per data trace, parallel to fig.data[N_ANCHORS:]
+    trace_meta = []
     avg_indices, med_indices = [], []
 
     def _add_metric_traces(x_col, y_col, visible, index_list):
@@ -157,19 +158,12 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     _add_metric_traces("score_rel_med", "opp_rel_med", False, med_indices)
 
     total = len(fig.data)
-    data_range = list(range(N_ANCHORS, total))
 
-    # ── Benchmark visibility list ────────────────────────────────────────────
-    # Anchor traces are always "legendonly"; data traces flip between T/F.
     def _bench_vis(show_indices):
         show_set = set(show_indices)
         return ["legendonly"] * N_ANCHORS + [i in show_set for i in range(N_ANCHORS, total)]
 
     # ── Lucky / Unlucky summary ──────────────────────────────────────────────
-    # A lucky win  = win where both teams scored below avg AND team beat opp
-    #   relative to avg (Q3, below diagonal: score_rel > opp_rel, both < 0)
-    # An unlucky loss = loss where both teams scored above avg AND opp beat
-    #   team relative to avg (Q1, above diagonal: opp_rel > score_rel, both > 0)
     def _lucky_summary(fdf, xc, yc):
         lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
         unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
@@ -195,9 +189,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         for s in seasons
     }
 
-    # ── Year update args (method="update" lets us change traces + annotation) ─
-    # Anchor traces must be included in the trace update with their original
-    # [None] values so we can target all traces without filtering by index.
+    # ── Year update args ─────────────────────────────────────────────────────
     def _year_update(season_filter):
         fdf = df if season_filter == "All" else df[df["season"] == season_filter]
         xs = [[None]] * N_ANCHORS
@@ -220,24 +212,18 @@ def lucky_win_plot(df, output="lucky_wins.html"):
             },
         ]
 
-    # Mutable boxes so _year_update can reference indices before they are set.
     _avg_sidx = [None]
     _med_sidx = [None]
 
     # ── Background fills + diagonal + zero-lines (per subplot) ──────────────
-    # Shapes use each subplot's own axis reference so coordinates are in data
-    # space. A large range (±500) safely exceeds any realistic score delta;
-    # Plotly clips the fill to the visible axis range automatically.
-    # Global symmetric axis range — centers every subplot at zero and prevents
-    # shape coordinates from inflating the auto-range.
     max_val = (
         df[["score_rel_avg", "opp_rel_avg", "score_rel_med", "opp_rel_med"]]
         .abs().values.max() * 1.15
     )
-    R = max_val  # shorthand used in shapes below
+    R = max_val
 
-    LUCKY_FILL   = "rgba(173, 198, 245, 0.40)"   # periwinkle blue — below diagonal
-    UNLUCKY_FILL = "rgba(255, 160, 160, 0.35)"    # light pink-red  — above diagonal
+    LUCKY_FILL   = "rgba(173, 198, 245, 0.40)"
+    UNLUCKY_FILL = "rgba(255, 160, 160, 0.35)"
 
     for i in range(len(teams)):
         r, c = divmod(i, ncols)
@@ -245,25 +231,25 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xax = "x" if ax_n == 1 else f"x{ax_n}"
         yax = "y" if ax_n == 1 else f"y{ax_n}"
 
-        # Q1 pink (x>0, y>0, y>x): upper-left triangle of Q1, above diagonal
+        # Q1 pink (above diagonal)
         fig.add_shape(type="path",
             path=f"M 0,0 L 0,{R} L {R},{R} Z",
             fillcolor=UNLUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Q1 blue (x>0, y>0, y<x): lower-right triangle of Q1, below diagonal
+        # Q1 blue (below diagonal)
         fig.add_shape(type="path",
             path=f"M 0,0 L {R},{R} L {R},0 Z",
             fillcolor=LUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Q3 pink (x<0, y<0, y>x): upper-right triangle of Q3, above diagonal
+        # Q3 pink (above diagonal)
         fig.add_shape(type="path",
             path=f"M 0,0 L {-R},0 L {-R},{-R} Z",
             fillcolor=UNLUCKY_FILL, line_width=0,
             xref=xax, yref=yax, layer="below",
         )
-        # Q3 blue (x<0, y<0, y<x): lower-left triangle of Q3, below diagonal
+        # Q3 blue (below diagonal)
         fig.add_shape(type="path",
             path=f"M 0,0 L 0,{-R} L {-R},{-R} Z",
             fillcolor=LUCKY_FILL, line_width=0,
@@ -288,13 +274,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
 
-    # ── Corner watermark annotations (Lucky / Unlucky per subplot) ──────────
-    # xref/yref "xN domain" places the annotation at a fraction (0–1) of that
-    # subplot's own plot area, independent of the data scale on each axis.
-    # Both labels sit in the upper-right quadrant (domain x>0.5, y>0.5).
-    # "Unlucky Loss" is above the diagonal (y_domain > x_domain → pink zone).
-    # "Lucky Win"    is below the diagonal (y_domain < x_domain → blue zone).
-    # The same colors bleed into lower-left, making that quadrant self-explanatory.
+    # ── Corner watermark annotations ─────────────────────────────────────────
     LUCKY_TXT   = dict(showarrow=False, font=dict(size=11, color="rgba(31,119,180,0.60)"))
     UNLUCKY_TXT = dict(showarrow=False, font=dict(size=11, color="rgba(214,39,40,0.60)"))
     corner_annots = []
@@ -304,10 +284,8 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         xd = "x domain" if ax_n == 1 else f"x{ax_n} domain"
         yd = "y domain" if ax_n == 1 else f"y{ax_n} domain"
         corner_annots += [
-            # Centroid of pink triangle in Q1: (R/3, 2R/3) → domain (0.667, 0.833)
             dict(**UNLUCKY_TXT, xref=xd, yref=yd,
                  x=0.667, y=0.833, xanchor="center", yanchor="middle", text="Unlucky<br>Loss"),
-            # Centroid of blue triangle in Q1: (2R/3, R/3) → domain (0.833, 0.667)
             dict(**LUCKY_TXT, xref=xd, yref=yd,
                  x=0.833, y=0.667, xanchor="center", yanchor="middle", text="Lucky<br>Win"),
         ]
@@ -322,8 +300,6 @@ def lucky_win_plot(df, output="lucky_wins.html"):
              x=1.0, y=1.17, xanchor="right", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
     ]
-    # Two summary annotations at same position: avg visible by default, med hidden.
-    # Benchmark buttons swap their font colors to show/hide each one.
     _summary_base = dict(xref="paper", yref="paper",
                          x=0.5, y=1.07, xanchor="center", yanchor="bottom",
                          showarrow=False)
@@ -332,18 +308,16 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     med_summary_annot = dict(**_summary_base, text=summary_med_texts["All"],
                              font=dict(size=11, color="rgba(0,0,0,0)"))
 
-    # Set the real indices now that all preceding annotation lists are known.
     _base_idx = len(existing_annots) + len(corner_annots) + len(label_annots)
     _avg_sidx[0] = _base_idx
     _med_sidx[0] = _base_idx + 1
 
-    # Re-build year buttons now that indices are known.
     year_buttons = [dict(label=str(s), method="update", args=_year_update(s))
                     for s in seasons]
 
     fig.update_layout(
         updatemenus=[
-            dict(  # Season filter — top left
+            dict(
                 type="buttons", direction="right",
                 x=0.0, xanchor="left", y=1.14, yanchor="top",
                 buttons=year_buttons,
@@ -351,7 +325,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
                 pad={"r": 5, "t": 0},
             ),
-            dict(  # Benchmark toggle — top right
+            dict(
                 type="buttons", direction="right",
                 x=1.0, xanchor="right", y=1.14, yanchor="top",
                 buttons=[
@@ -363,7 +337,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
                                  f"annotations[{_med_sidx[0]}].font.color": "rgba(0,0,0,0)",
                              },
                          ]),
-                    dict(label="Weekly Median",  method="update",
+                    dict(label="Weekly Median", method="update",
                          args=[
                              {"visible": _bench_vis(med_indices)},
                              {
@@ -385,7 +359,6 @@ def lucky_win_plot(df, output="lucky_wins.html"):
             x=0.5, font_size=15,
         ),
         height=310 * nrows,
-        width=1400,
         template="plotly_white",
         margin=dict(t=250, b=90),
         legend=dict(
@@ -394,7 +367,55 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         ),
     )
 
-    fig.write_html(output)
+    return fig
+
+
+def lucky_win_plot(df, output="lucky_wins.html"):
+    print("  Building desktop layout (4 columns)...")
+    desktop_fig = _build_figure(df, ncols=4)
+    print("  Building mobile layout (2 columns)...")
+    mobile_fig = _build_figure(df, ncols=2)
+
+    kw = dict(full_html=False, include_plotlyjs=False, config={"responsive": True})
+    desktop_div = desktop_fig.to_html(**kw)
+    mobile_div  = mobile_fig.to_html(**kw)
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lucky Wins — Pretend GMs</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; padding: 0; background: #fff; }}
+    .layout-wrap {{ width: 100%; }}
+  </style>
+</head>
+<body>
+  <div id="desktop-wrap" class="layout-wrap">{desktop_div}</div>
+  <div id="mobile-wrap"  class="layout-wrap" style="display:none;">{mobile_div}</div>
+  <script>
+    function applyLayout() {{
+      var mobile = window.innerWidth < 769;
+      var dw = document.getElementById('desktop-wrap');
+      var mw = document.getElementById('mobile-wrap');
+      dw.style.display = mobile ? 'none' : 'block';
+      mw.style.display = mobile ? 'block' : 'none';
+      var wrap = mobile ? mw : dw;
+      var gdiv = wrap.querySelector('.js-plotly-plot');
+      if (gdiv) Plotly.Plots.resize(gdiv);
+    }}
+    window.addEventListener('load', applyLayout);
+    window.addEventListener('resize', applyLayout);
+  </script>
+</body>
+</html>"""
+
+    with open(output, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
     abs_path = os.path.abspath(output)
     print(f"Saved: {abs_path}")
     webbrowser.open(f"file:///{abs_path}")
