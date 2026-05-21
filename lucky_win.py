@@ -170,28 +170,28 @@ def lucky_win_plot(df, output="lucky_wins.html"):
     #   relative to avg (Q3, below diagonal: score_rel > opp_rel, both < 0)
     # An unlucky loss = loss where both teams scored above avg AND opp beat
     #   team relative to avg (Q1, above diagonal: opp_rel > score_rel, both > 0)
-    def _lucky_summary(fdf):
-        lines = []
-        for label, xc, yc in [
-            ("Avg",    "score_rel_avg", "opp_rel_avg"),
-            ("Median", "score_rel_med", "opp_rel_med"),
-        ]:
-            lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
-            unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
-            if lucky.empty:   luckiest,   n_l = "N/A", 0
-            else: c = lucky.groupby("team").size();   luckiest,   n_l = c.idxmax(), int(c.max())
-            if unlucky.empty: unluckiest, n_u = "N/A", 0
-            else: c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
-            lines.append(
-                f"<b>{label}</b> — "
-                f"Luckiest: {luckiest} ({n_l})  ·  "
-                f"Unluckiest: {unluckiest} ({n_u})"
-            )
-        return "<br>".join(lines)
+    def _lucky_summary(fdf, xc, yc):
+        lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
+        unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
+        if lucky.empty:   luckiest,   n_l = "N/A", 0
+        else: c = lucky.groupby("team").size();   luckiest,   n_l = c.idxmax(), int(c.max())
+        if unlucky.empty: unluckiest, n_u = "N/A", 0
+        else: c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
+        return (
+            f"<b>Luckiest Team:</b> {luckiest} ({n_l} lucky wins)"
+            f"    |    "
+            f"<b>Unluckiest Team:</b> {unluckiest} ({n_u} unlucky losses)"
+        )
 
     seasons = ["All"] + sorted(df["season"].unique().tolist())
-    summary_texts = {
-        s: _lucky_summary(df if s == "All" else df[df["season"] == s])
+    summary_avg_texts = {
+        s: _lucky_summary(df if s == "All" else df[df["season"] == s],
+                          "score_rel_avg", "opp_rel_avg")
+        for s in seasons
+    }
+    summary_med_texts = {
+        s: _lucky_summary(df if s == "All" else df[df["season"] == s],
+                          "score_rel_med", "opp_rel_med")
         for s in seasons
     }
 
@@ -214,11 +214,15 @@ def lucky_win_plot(df, output="lucky_wins.html"):
             hs.append(_make_hover(sub, m["x_col"], m["y_col"]))
         return [
             {"x": xs, "y": ys, "hovertext": hs},
-            {f"annotations[{_sidx[0]}].text": summary_texts[season_filter]},
+            {
+                f"annotations[{_avg_sidx[0]}].text": summary_avg_texts[season_filter],
+                f"annotations[{_med_sidx[0]}].text": summary_med_texts[season_filter],
+            },
         ]
 
-    # Mutable box so _year_update can reference the index before it is set.
-    _sidx = [None]
+    # Mutable boxes so _year_update can reference indices before they are set.
+    _avg_sidx = [None]
+    _med_sidx = [None]
 
     # ── Background fills + diagonal + zero-lines (per subplot) ──────────────
     # Shapes use each subplot's own axis reference so coordinates are in data
@@ -318,17 +322,22 @@ def lucky_win_plot(df, output="lucky_wins.html"):
              x=1.0, y=1.17, xanchor="right", yanchor="bottom",
              showarrow=False, font=dict(size=11, color="#444")),
     ]
-    summary_annot = dict(
-        text=summary_texts["All"],
-        xref="paper", yref="paper",
-        x=0.5, y=1.24, xanchor="center", yanchor="bottom",
-        showarrow=False, font=dict(size=11, color="#333"),
-    )
+    # Two summary annotations at same position: avg visible by default, med hidden.
+    # Benchmark buttons swap their font colors to show/hide each one.
+    _summary_base = dict(xref="paper", yref="paper",
+                         x=0.5, y=1.07, xanchor="center", yanchor="bottom",
+                         showarrow=False)
+    avg_summary_annot = dict(**_summary_base, text=summary_avg_texts["All"],
+                             font=dict(size=11, color="#333"))
+    med_summary_annot = dict(**_summary_base, text=summary_med_texts["All"],
+                             font=dict(size=11, color="rgba(0,0,0,0)"))
 
-    # Set the real index now that all preceding annotation lists are known.
-    _sidx[0] = len(existing_annots) + len(corner_annots) + len(label_annots)
+    # Set the real indices now that all preceding annotation lists are known.
+    _base_idx = len(existing_annots) + len(corner_annots) + len(label_annots)
+    _avg_sidx[0] = _base_idx
+    _med_sidx[0] = _base_idx + 1
 
-    # Re-build year buttons now that _SUMMARY_IDX is known.
+    # Re-build year buttons now that indices are known.
     year_buttons = [dict(label=str(s), method="update", args=_year_update(s))
                     for s in seasons]
 
@@ -336,7 +345,7 @@ def lucky_win_plot(df, output="lucky_wins.html"):
         updatemenus=[
             dict(  # Season filter — top left
                 type="buttons", direction="right",
-                x=0.0, xanchor="left", y=1.12, yanchor="top",
+                x=0.0, xanchor="left", y=1.14, yanchor="top",
                 buttons=year_buttons,
                 showactive=True,
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
@@ -344,18 +353,30 @@ def lucky_win_plot(df, output="lucky_wins.html"):
             ),
             dict(  # Benchmark toggle — top right
                 type="buttons", direction="right",
-                x=1.0, xanchor="right", y=1.12, yanchor="top",
+                x=1.0, xanchor="right", y=1.14, yanchor="top",
                 buttons=[
                     dict(label="Weekly Average", method="update",
-                         args=[{"visible": _bench_vis(avg_indices)}]),
+                         args=[
+                             {"visible": _bench_vis(avg_indices)},
+                             {
+                                 f"annotations[{_avg_sidx[0]}].font.color": "#333",
+                                 f"annotations[{_med_sidx[0]}].font.color": "rgba(0,0,0,0)",
+                             },
+                         ]),
                     dict(label="Weekly Median",  method="update",
-                         args=[{"visible": _bench_vis(med_indices)}]),
+                         args=[
+                             {"visible": _bench_vis(med_indices)},
+                             {
+                                 f"annotations[{_avg_sidx[0]}].font.color": "rgba(0,0,0,0)",
+                                 f"annotations[{_med_sidx[0]}].font.color": "#333",
+                             },
+                         ]),
                 ],
                 showactive=True,
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
             ),
         ],
-        annotations=existing_annots + corner_annots + label_annots + [summary_annot],
+        annotations=existing_annots + corner_annots + label_annots + [avg_summary_annot, med_summary_annot],
         title=dict(
             text=(
                 "Lucky Wins — Pretend GMs Fantasy League<br>"
