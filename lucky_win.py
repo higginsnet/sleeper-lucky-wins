@@ -150,9 +150,13 @@ def _build_figure(df, ncols=4):
 
     nrows     = -(-len(teams) // ncols)
     h_spacing = 0.07 if ncols >= 4 else 0.12
-    # More vertical space per gap when there are few rows so subplot titles
-    # don't collide with the x-axis labels of the row above.
-    v_spacing = max(0.10, round(0.36 / nrows, 3))
+    # Vertical spacing scales with row count so subplot titles don't collide
+    # with x-axis labels above, while not wasting excessive space on many-row
+    # mobile layouts.
+    if ncols >= 4:
+        v_spacing = max(0.10, round(0.36 / nrows, 3))  # desktop
+    else:
+        v_spacing = max(0.06, round(0.25 / nrows, 3))  # mobile
 
     fig = make_subplots(
         rows=nrows, cols=ncols,
@@ -283,8 +287,13 @@ def _build_figure(df, ncols=4):
     # needs room for the summary line.
     MARGIN_T = 80 if ncols >= 4 else 90
     MARGIN_B = 120
-    fig_h    = 310 * nrows
-    plot_h   = fig_h - MARGIN_T - MARGIN_B
+    # Mobile rows are shorter (260px vs 310px) to reduce wasted vertical space.
+    # The mobile fig_h adds margins explicitly so plot_h = 260 * nrows exactly.
+    if ncols >= 4:
+        fig_h  = 310 * nrows
+    else:
+        fig_h  = 260 * nrows + MARGIN_T + MARGIN_B
+    plot_h = fig_h - MARGIN_T - MARGIN_B
 
     def _py(px_from_top):
         return 1.0 + (MARGIN_T - px_from_top) / plot_h
@@ -335,14 +344,17 @@ def lucky_win_plot(df, output="lucky_wins.html", league_name=""):
 
     # ── Build one desktop+mobile figure pair per season ───────────────────────
     season_htmls = {}   # s -> {"desktop": str, "mobile": str}
-    kw = dict(full_html=False, include_plotlyjs=False, config={"responsive": True})
+    kw_desktop = dict(full_html=False, include_plotlyjs=False,
+                      config={"responsive": True})
+    kw_mobile  = dict(full_html=False, include_plotlyjs=False,
+                      config={"responsive": True, "displayModeBar": False})
 
     for s in seasons:
         df_s = df if s == "All" else df[df["season"] == s]
         print(f"    Season {s}: {sorted(df_s['team'].unique()).__len__()} teams")
 
-        desktop_div = _build_figure(df_s, ncols=4).to_html(**kw)
-        mobile_div  = _build_figure(df_s, ncols=2).to_html(**kw)
+        desktop_div = _build_figure(df_s, ncols=4).to_html(**kw_desktop)
+        mobile_div  = _build_figure(df_s, ncols=2).to_html(**kw_mobile)
         season_htmls[s] = {"desktop": desktop_div, "mobile": mobile_div}
 
     # ── Assemble HTML pieces (avoid f-string on Plotly content) ──────────────
