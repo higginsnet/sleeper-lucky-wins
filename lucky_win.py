@@ -292,11 +292,12 @@ def _build_figure(df, ncols=4):
     MARGIN_T = 80 if ncols >= 4 else 90
     MARGIN_B = 120
     # Mobile rows are shorter (260px vs 310px) to reduce wasted vertical space.
-    # The mobile fig_h adds margins explicitly so plot_h = 260 * nrows exactly.
+    # An extra 40px per inter-row gap is added to fig_h so that increasing gap
+    # space doesn't shrink the charts — both grow together.
     if ncols >= 4:
         fig_h  = 310 * nrows
     else:
-        fig_h  = 260 * nrows + MARGIN_T + MARGIN_B
+        fig_h  = 260 * nrows + 40 * max(nrows - 1, 0) + MARGIN_T + MARGIN_B
     plot_h = fig_h - MARGIN_T - MARGIN_B
 
     def _py(px_from_top):
