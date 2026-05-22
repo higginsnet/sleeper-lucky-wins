@@ -106,7 +106,7 @@ def _build_figure(df, ncols=4, league_name=""):
     """
     teams = sorted(df["team"].unique())
     nrows = -(-len(teams) // ncols)
-    h_spacing = 0.07 if ncols >= 4 else 0.12
+    h_spacing = 0.07 if ncols >= 4 else 0.08
 
     fig = make_subplots(
         rows=nrows, cols=ncols,
@@ -286,6 +286,15 @@ def _build_figure(df, ncols=4, league_name=""):
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
 
+    # On mobile (2-col), only show axis titles on edge subplots so inner labels
+    # don't collide or waste horizontal space. Y-title: left column only.
+    # X-title: bottom row only. This also fixes the x-axis misalignment.
+    if ncols < 4:
+        fig.update_xaxes(title_text="")
+        fig.update_xaxes(title_text="Team pts vs benchmark", title_font_size=9, row=nrows)
+        fig.update_yaxes(title_text="")
+        fig.update_yaxes(title_text="Opp pts vs benchmark", title_font_size=9, col=1)
+
     # ── Corner watermark annotations ─────────────────────────────────────────
     LUCKY_TXT   = dict(showarrow=False, font=dict(size=11, color="rgba(31,119,180,0.60)"))
     UNLUCKY_TXT = dict(showarrow=False, font=dict(size=11, color="rgba(214,39,40,0.60)"))
@@ -332,18 +341,19 @@ def _build_figure(df, ncols=4, league_name=""):
     )
 
     if ncols < 4:
-        # ── Mobile: centered labels, stacked button rows, generous spacing ─
+        # ── Mobile: centered labels, stacked button rows ───────────────────
+        # Pixel offsets are tight: label sits 8px above its button group.
         label_annots = [
             dict(text="<b>Season</b>", xref="paper", yref="paper",
-                 x=0.5, y=_py(62), xanchor="center", yanchor="bottom",
+                 x=0.5, y=_py(70), xanchor="center", yanchor="bottom",
                  showarrow=False, font=dict(size=11, color="#444")),
             dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
                  x=0.5, y=_py(148), xanchor="center", yanchor="bottom",
                  showarrow=False, font=dict(size=11, color="#444")),
         ]
-        season_btn_y = _py(80)
-        bmark_btn_y  = _py(166)
-        summary_y    = _py(240)
+        season_btn_y = _py(80)   # 10px below Season label bottom
+        bmark_btn_y  = _py(158)  # 10px below Benchmark label bottom
+        summary_y    = _py(232)  # ~35px below benchmark button bottom
         season_btn_x, season_btn_anchor = 0.5, "center"
         bmark_btn_x,  bmark_btn_anchor  = 0.5, "center"
     else:
