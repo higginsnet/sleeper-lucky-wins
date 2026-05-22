@@ -1,5 +1,4 @@
 import os
-import webbrowser
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -283,7 +282,7 @@ def _build_figure(df, ncols=4):
     # Title and season selector live in HTML above the figure; the figure only
     # needs room for the summary line.
     MARGIN_T = 80 if ncols >= 4 else 90
-    MARGIN_B = 90
+    MARGIN_B = 120
     fig_h    = 310 * nrows
     plot_h   = fig_h - MARGIN_T - MARGIN_B
 
@@ -450,7 +449,6 @@ def lucky_win_plot(df, output="lucky_wins.html", league_name=""):
 
     abs_path = os.path.abspath(output)
     print(f"  Saved: {abs_path}")
-    webbrowser.open(f"file:///{abs_path}")
 
 
 if __name__ == "__main__":
