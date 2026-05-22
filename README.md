@@ -14,10 +14,10 @@ The four shaded zones tell the story:
 
 | Zone | Color | Meaning |
 |---|---|---|
-| Q1 upper-left triangle | 🔴 Pink | **Unlucky loss** — both teams above median, but your opponent scored more |
-| Q1 lower-right triangle | 🔵 Blue | **Lucky win** — both teams above median, but you scored more |
-| Q3 upper-left triangle | 🔵 Blue | **Lucky win** — both teams below median, but you scored more |
-| Q3 lower-right triangle | 🔴 Pink | **Unlucky loss** — both teams below median, but your opponent scored more |
+| Q1 upper triangle | 🔴 Pink | **Unlucky loss** — both teams played well, but you ran into a better team that week |
+| Q1 lower triangle | 🔵 Blue | **Lucky win** — you faced a strong opponent and a loss seemed likely, but your team showed up and scored more |
+| Q3 upper triangle | 🔴 Pink | **Unlucky loss** — you drew an easy opponent but your team didn't show up, and you lost anyway |
+| Q3 lower triangle | 🔵 Blue | **Lucky win** — the luckiest outcome: you won while underperforming because your opponent performed even worse |
 
 A **lucky win** means you won a week where both teams struggled — fortune favored you. An **unlucky loss** means you played well but your opponent happened to play better in a high-scoring week.
 
