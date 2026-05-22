@@ -7,8 +7,8 @@ from plotly.subplots import make_subplots
 
 from sleeper_api import get_users, get_rosters, get_matchups
 
-# ── League configs ────────────────────────────────────────────────────────────
-# Each entry: oldest season first, newest last.
+# ── League configs ─────────────────────────────────────────────────────────────
+# Each list is ordered oldest → newest season.
 LEAGUES_PRETEND_GMS = [
     {"league_id": "1004495314675503104", "season": 2023, "playoff_week_start": 15, "last_scored_leg": 17},
     {"league_id": "1048281198428049408", "season": 2024, "playoff_week_start": 15, "last_scored_leg": 17},
@@ -25,19 +25,21 @@ LEAGUES_ON_THE_CLOCK = [
 ]
 
 
+# ── Data fetching ──────────────────────────────────────────────────────────────
+
 def build_matchup_df(leagues):
     rows = []
 
     for league in leagues:
-        league_id = league["league_id"]
-        season = league["season"]
+        league_id     = league["league_id"]
+        season        = league["season"]
         playoff_start = league["playoff_week_start"]
-        last_week = league["last_scored_leg"]
+        last_week     = league["last_scored_leg"]
 
-        users = get_users(league_id)
+        users   = get_users(league_id)
         rosters = get_rosters(league_id)
 
-        user_map = {u["user_id"]: u.get("display_name", u["user_id"]) for u in users}
+        user_map   = {u["user_id"]: u.get("display_name", u["user_id"]) for u in users}
         roster_map = {
             r["roster_id"]: user_map.get(r["owner_id"], f"Roster {r['roster_id']}")
             for r in rosters
@@ -62,31 +64,32 @@ def build_matchup_df(leagues):
                     continue
                 for team, opp in [pair, pair[::-1]]:
                     rows.append({
-                        "season": season,
-                        "week": week,
+                        "season":     season,
+                        "week":       week,
                         "is_playoff": week >= playoff_start,
-                        "team": roster_map.get(team["roster_id"], f"Roster {team['roster_id']}"),
-                        "opp": roster_map.get(opp["roster_id"], f"Roster {opp['roster_id']}"),
-                        "score": float(team["points"] or 0),
-                        "opp_score": float(opp["points"] or 0),
+                        "team":  roster_map.get(team["roster_id"], f"Roster {team['roster_id']}"),
+                        "opp":   roster_map.get(opp["roster_id"],  f"Roster {opp['roster_id']}"),
+                        "score":     float(team["points"] or 0),
+                        "opp_score": float(opp["points"]  or 0),
                     })
 
     df = pd.DataFrame(rows)
     df["win"] = df["score"] > df["opp_score"]
 
-    # Weekly benchmark: one row per team per week, so agg of "score" gives the league stat
     grp = df.groupby(["season", "week"])["score"]
     avg = grp.mean().rename("avg")
     med = grp.median().rename("med")
-    df = df.join(avg, on=["season", "week"]).join(med, on=["season", "week"])
+    df  = df.join(avg, on=["season", "week"]).join(med, on=["season", "week"])
 
-    df["score_rel_avg"] = df["score"] - df["avg"]
+    df["score_rel_avg"] = df["score"]     - df["avg"]
     df["opp_rel_avg"]   = df["opp_score"] - df["avg"]
-    df["score_rel_med"] = df["score"] - df["med"]
+    df["score_rel_med"] = df["score"]     - df["med"]
     df["opp_rel_med"]   = df["opp_score"] - df["med"]
 
     return df
 
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _make_hover(subset, x_col, y_col):
     bmark = "avg" if "avg" in x_col else "median"
@@ -99,13 +102,34 @@ def _make_hover(subset, x_col, y_col):
     ]
 
 
-def _build_figure(df, ncols=4, league_name=""):
+def _lucky_summary(fdf, xc, yc, sep="    |    "):
+    """Return a luckiest/unluckiest summary string for one benchmark."""
+    lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
+    unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
+    if lucky.empty:   luckiest,   n_l = "N/A", 0
+    else: c = lucky.groupby("team").size();   luckiest,   n_l = c.idxmax(), int(c.max())
+    if unlucky.empty: unluckiest, n_u = "N/A", 0
+    else: c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
+    return (
+        f"<b>Luckiest Team:</b> {luckiest} ({n_l} lucky wins)"
+        f"{sep}"
+        f"<b>Unluckiest Team:</b> {unluckiest} ({n_u} unlucky losses)"
+    )
+
+
+# ── Figure builder ─────────────────────────────────────────────────────────────
+
+def _build_figure(df, ncols=4):
     """
-    Build the Lucky Win Plotly figure.
-    ncols=4 for the desktop layout, ncols=2 for the mobile layout.
+    Build one Lucky Win scatter figure for the data in `df`.
+    The caller pre-filters df to the desired season(s) and teams.
+    ncols=4 → desktop layout; ncols=2 → mobile layout.
     """
     teams = sorted(df["team"].unique())
-    nrows = -(-len(teams) // ncols)
+    if not teams:
+        return go.Figure()
+
+    nrows     = -(-len(teams) // ncols)
     h_spacing = 0.07 if ncols >= 4 else 0.08
 
     fig = make_subplots(
@@ -116,7 +140,6 @@ def _build_figure(df, ncols=4, league_name=""):
     )
 
     STYLES = [
-        # (is_playoff, win, color, symbol, label)
         (False, True,  "#1f77b4", "circle", "Regular Win"),
         (False, False, "#1f77b4", "x",      "Regular Loss"),
         (True,  True,  "#d62728", "circle", "Playoff Win"),
@@ -163,8 +186,8 @@ def _build_figure(df, ncols=4, league_name=""):
                 trace_meta.append(dict(team=team, is_playoff=is_playoff, win=win,
                                        x_col=x_col, y_col=y_col))
 
-    _add_metric_traces("score_rel_avg", "opp_rel_avg", False, avg_indices)   # hidden by default
-    _add_metric_traces("score_rel_med", "opp_rel_med", True,  med_indices)   # visible by default
+    _add_metric_traces("score_rel_avg", "opp_rel_avg", False, avg_indices)  # hidden by default
+    _add_metric_traces("score_rel_med", "opp_rel_med", True,  med_indices)  # visible by default
 
     total = len(fig.data)
 
@@ -172,62 +195,7 @@ def _build_figure(df, ncols=4, league_name=""):
         show_set = set(show_indices)
         return ["legendonly"] * N_ANCHORS + [i in show_set for i in range(N_ANCHORS, total)]
 
-    # ── Lucky / Unlucky summary ──────────────────────────────────────────────
-    # sep: desktop uses " | " (one line), mobile uses "<br>" (two lines).
-    _sep = "<br>" if ncols < 4 else "    |    "
-
-    def _lucky_summary(fdf, xc, yc):
-        lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
-        unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
-        if lucky.empty:   luckiest,   n_l = "N/A", 0
-        else: c = lucky.groupby("team").size();   luckiest,   n_l = c.idxmax(), int(c.max())
-        if unlucky.empty: unluckiest, n_u = "N/A", 0
-        else: c = unlucky.groupby("team").size(); unluckiest, n_u = c.idxmax(), int(c.max())
-        return (
-            f"<b>Luckiest Team:</b> {luckiest} ({n_l} lucky wins)"
-            f"{_sep}"
-            f"<b>Unluckiest Team:</b> {unluckiest} ({n_u} unlucky losses)"
-        )
-
-    seasons = ["All"] + sorted(df["season"].unique().tolist())
-    summary_avg_texts = {
-        s: _lucky_summary(df if s == "All" else df[df["season"] == s],
-                          "score_rel_avg", "opp_rel_avg")
-        for s in seasons
-    }
-    summary_med_texts = {
-        s: _lucky_summary(df if s == "All" else df[df["season"] == s],
-                          "score_rel_med", "opp_rel_med")
-        for s in seasons
-    }
-
-    # ── Year update args ─────────────────────────────────────────────────────
-    def _year_update(season_filter):
-        fdf = df if season_filter == "All" else df[df["season"] == season_filter]
-        xs = [[None]] * N_ANCHORS
-        ys = [[None]] * N_ANCHORS
-        hs = [[]] * N_ANCHORS
-        for m in trace_meta:
-            sub = fdf[
-                (fdf["team"] == m["team"]) &
-                (fdf["is_playoff"] == m["is_playoff"]) &
-                (fdf["win"] == m["win"])
-            ]
-            xs.append(sub[m["x_col"]].tolist())
-            ys.append(sub[m["y_col"]].tolist())
-            hs.append(_make_hover(sub, m["x_col"], m["y_col"]))
-        return [
-            {"x": xs, "y": ys, "hovertext": hs},
-            {
-                f"annotations[{_avg_sidx[0]}].text": summary_avg_texts[season_filter],
-                f"annotations[{_med_sidx[0]}].text": summary_med_texts[season_filter],
-            },
-        ]
-
-    _avg_sidx = [None]
-    _med_sidx = [None]
-
-    # ── Background fills + diagonal + zero-lines (per subplot) ──────────────
+    # ── Background fills + diagonal + zero-lines (per subplot) ───────────────
     max_val = (
         df[["score_rel_avg", "opp_rel_avg", "score_rel_med", "opp_rel_med"]]
         .abs().values.max() * 1.15
@@ -240,40 +208,24 @@ def _build_figure(df, ncols=4, league_name=""):
     for i in range(len(teams)):
         r, c = divmod(i, ncols)
         ax_n = r * ncols + c + 1
-        xax = "x" if ax_n == 1 else f"x{ax_n}"
-        yax = "y" if ax_n == 1 else f"y{ax_n}"
+        xax  = "x" if ax_n == 1 else f"x{ax_n}"
+        yax  = "y" if ax_n == 1 else f"y{ax_n}"
 
-        # Q1 pink (above diagonal)
-        fig.add_shape(type="path",
-            path=f"M 0,0 L 0,{R} L {R},{R} Z",
-            fillcolor=UNLUCKY_FILL, line_width=0,
-            xref=xax, yref=yax, layer="below",
-        )
-        # Q1 blue (below diagonal)
-        fig.add_shape(type="path",
-            path=f"M 0,0 L {R},{R} L {R},0 Z",
-            fillcolor=LUCKY_FILL, line_width=0,
-            xref=xax, yref=yax, layer="below",
-        )
-        # Q3 pink (above diagonal)
-        fig.add_shape(type="path",
-            path=f"M 0,0 L {-R},0 L {-R},{-R} Z",
-            fillcolor=UNLUCKY_FILL, line_width=0,
-            xref=xax, yref=yax, layer="below",
-        )
-        # Q3 blue (below diagonal)
-        fig.add_shape(type="path",
-            path=f"M 0,0 L 0,{-R} L {-R},{-R} Z",
-            fillcolor=LUCKY_FILL, line_width=0,
-            xref=xax, yref=yax, layer="below",
-        )
-        # Diagonal y = x
-        fig.add_shape(type="line",
-            x0=-R, y0=-R, x1=R, y1=R,
-            line=dict(dash="dash", color="#999", width=1),
-            xref=xax, yref=yax,
-        )
-        # Zero-lines
+        fig.add_shape(type="path", path=f"M 0,0 L 0,{R} L {R},{R} Z",
+                      fillcolor=UNLUCKY_FILL, line_width=0,
+                      xref=xax, yref=yax, layer="below")
+        fig.add_shape(type="path", path=f"M 0,0 L {R},{R} L {R},0 Z",
+                      fillcolor=LUCKY_FILL, line_width=0,
+                      xref=xax, yref=yax, layer="below")
+        fig.add_shape(type="path", path=f"M 0,0 L {-R},0 L {-R},{-R} Z",
+                      fillcolor=UNLUCKY_FILL, line_width=0,
+                      xref=xax, yref=yax, layer="below")
+        fig.add_shape(type="path", path=f"M 0,0 L 0,{-R} L {-R},{-R} Z",
+                      fillcolor=LUCKY_FILL, line_width=0,
+                      xref=xax, yref=yax, layer="below")
+        fig.add_shape(type="line", x0=-R, y0=-R, x1=R, y1=R,
+                      line=dict(dash="dash", color="#999", width=1),
+                      xref=xax, yref=yax)
         fig.add_hline(y=0, line_dash="dot", line_color="#bbb", line_width=0.8, row=r+1, col=c+1)
         fig.add_vline(x=0, line_dash="dot", line_color="#bbb", line_width=0.8, row=r+1, col=c+1)
 
@@ -286,16 +238,14 @@ def _build_figure(df, ncols=4, league_name=""):
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
 
-    # On mobile (2-col), only show axis titles on edge subplots so inner labels
-    # don't collide or waste horizontal space. Y-title: left column only.
-    # X-title: bottom row only. This also fixes the x-axis misalignment.
+    # Mobile: axis titles only on edge subplots to prevent label collision
     if ncols < 4:
         fig.update_xaxes(title_text="")
         fig.update_xaxes(title_text="Team pts vs benchmark", title_font_size=9, row=nrows)
         fig.update_yaxes(title_text="")
         fig.update_yaxes(title_text="Opp pts vs benchmark", title_font_size=9, col=1)
 
-    # ── Corner watermark annotations ─────────────────────────────────────────
+    # ── Corner watermark annotations ──────────────────────────────────────────
     LUCKY_TXT   = dict(showarrow=False, font=dict(size=11, color="rgba(31,119,180,0.60)"))
     UNLUCKY_TXT = dict(showarrow=False, font=dict(size=11, color="rgba(214,39,40,0.60)"))
     corner_annots = []
@@ -305,129 +255,80 @@ def _build_figure(df, ncols=4, league_name=""):
         xd = "x domain" if ax_n == 1 else f"x{ax_n} domain"
         yd = "y domain" if ax_n == 1 else f"y{ax_n} domain"
         corner_annots += [
-            dict(**UNLUCKY_TXT, xref=xd, yref=yd,
-                 x=0.667, y=0.833, xanchor="center", yanchor="middle", text="Unlucky<br>Loss"),
-            dict(**LUCKY_TXT, xref=xd, yref=yd,
-                 x=0.833, y=0.667, xanchor="center", yanchor="middle", text="Lucky<br>Win"),
+            dict(**UNLUCKY_TXT, xref=xd, yref=yd, x=0.667, y=0.833,
+                 xanchor="center", yanchor="middle", text="Unlucky<br>Loss"),
+            dict(**LUCKY_TXT,   xref=xd, yref=yd, x=0.833, y=0.667,
+                 xanchor="center", yanchor="middle", text="Lucky<br>Win"),
         ]
 
-    # ── Layout: buttons + labels + summary + title ──────────────────────────
-    # All y values above the plot use paper coordinates (y > 1.0 = in the top
-    # margin). We convert pixel-from-top distances so spacing is physically
-    # consistent regardless of figure height.
-    #
-    # Desktop (4 col): buttons sit side-by-side on one row → 200px margin.
-    # Mobile  (2 col): buttons stack on two rows → 230px margin to fit.
-    MARGIN_T = 290 if ncols < 4 else 200
+    # ── Layout ────────────────────────────────────────────────────────────────
+    # Title and season selector live in HTML above the figure; the figure only
+    # needs room for the benchmark toggle + summary.
+    MARGIN_T = 130 if ncols >= 4 else 160
     MARGIN_B = 90
-    fig_h  = 310 * nrows
-    plot_h = fig_h - MARGIN_T - MARGIN_B
+    fig_h    = 310 * nrows
+    plot_h   = fig_h - MARGIN_T - MARGIN_B
 
     def _py(px_from_top):
-        """Map a pixel distance from the figure top → paper y coordinate."""
         return 1.0 + (MARGIN_T - px_from_top) / plot_h
 
     existing_annots = list(fig.layout.annotations)
 
-    # Title as an annotation so we can freely place it above y=1.
-    title_annot = dict(
-        text=(
-            f"<b>Lucky Wins — {league_name}</b><br>"
-            "<sup>Circles = Wins · X = Losses · Blue = Regular Season · Red = Playoffs</sup>"
-        ),
-        xref="paper", yref="paper",
-        x=0.5, y=_py(12), xanchor="center", yanchor="top",
-        showarrow=False, font=dict(size=15),
-    )
+    # Benchmark label + summary (sep differs by layout)
+    _sep = "<br>" if ncols < 4 else "    |    "
+    avg_text = _lucky_summary(df, "score_rel_avg", "opp_rel_avg", _sep)
+    med_text = _lucky_summary(df, "score_rel_med", "opp_rel_med", _sep)
 
-    if ncols < 4:
-        # ── Mobile: centered labels, stacked button rows ───────────────────
-        # Pixel offsets are tight: label sits 8px above its button group.
-        label_annots = [
-            dict(text="<b>Season</b>", xref="paper", yref="paper",
-                 x=0.5, y=_py(70), xanchor="center", yanchor="bottom",
-                 showarrow=False, font=dict(size=11, color="#444")),
-            dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
-                 x=0.5, y=_py(148), xanchor="center", yanchor="bottom",
-                 showarrow=False, font=dict(size=11, color="#444")),
-        ]
-        season_btn_y = _py(80)   # 10px below Season label bottom
-        bmark_btn_y  = _py(158)  # 10px below Benchmark label bottom
-        summary_y    = _py(232)  # ~35px below benchmark button bottom
-        season_btn_x, season_btn_anchor = 0.5, "center"
-        bmark_btn_x,  bmark_btn_anchor  = 0.5, "center"
-    else:
-        # ── Desktop: Season left, Benchmark right, same row ───────────────
-        label_annots = [
-            dict(text="<b>Season</b>", xref="paper", yref="paper",
-                 x=0.0, y=_py(72), xanchor="left", yanchor="bottom",
-                 showarrow=False, font=dict(size=11, color="#444")),
-            dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
-                 x=1.0, y=_py(72), xanchor="right", yanchor="bottom",
-                 showarrow=False, font=dict(size=11, color="#444")),
-        ]
-        season_btn_y = _py(96)
-        bmark_btn_y  = _py(96)
-        summary_y    = _py(158)
-        season_btn_x, season_btn_anchor = 0.0, "left"
-        bmark_btn_x,  bmark_btn_anchor  = 1.0, "right"
+    bmark_x       = 1.0    if ncols >= 4 else 0.5
+    bmark_xanchor = "right" if ncols >= 4 else "center"
+    summary_y     = _py(100) if ncols >= 4 else _py(115)
 
+    label_annots = [
+        dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
+             x=bmark_x, y=_py(20), xanchor=bmark_xanchor, yanchor="bottom",
+             showarrow=False, font=dict(size=11, color="#444")),
+    ]
     _summary_base = dict(xref="paper", yref="paper",
                          x=0.5, y=summary_y, xanchor="center", yanchor="bottom",
                          showarrow=False)
-    avg_summary_annot = dict(**_summary_base, text=summary_avg_texts["All"],
-                             font=dict(size=11, color="rgba(0,0,0,0)"))   # hidden by default
-    med_summary_annot = dict(**_summary_base, text=summary_med_texts["All"],
-                             font=dict(size=11, color="#333"))             # visible by default
+    avg_summary_annot = dict(**_summary_base, text=avg_text,
+                             font=dict(size=11, color="rgba(0,0,0,0)"))  # hidden
+    med_summary_annot = dict(**_summary_base, text=med_text,
+                             font=dict(size=11, color="#333"))            # visible
 
-    _base_idx = len(existing_annots) + 1 + len(label_annots)  # +1 for title_annot
-    _avg_sidx[0] = _base_idx
-    _med_sidx[0] = _base_idx + 1
+    avg_idx = len(existing_annots) + len(corner_annots) + len(label_annots)
+    med_idx = avg_idx + 1
 
-    year_buttons = [dict(label=str(s), method="update", args=_year_update(s))
-                    for s in seasons]
+    bmark_btn_y = _py(32)
 
     fig.update_layout(
         updatemenus=[
             dict(
                 type="buttons", direction="right",
-                x=season_btn_x, xanchor=season_btn_anchor,
-                y=season_btn_y, yanchor="top",
-                buttons=year_buttons,
-                showactive=True,
-                bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
-                pad={"r": 5, "t": 0},
-            ),
-            dict(
-                type="buttons", direction="right",
-                x=bmark_btn_x, xanchor=bmark_btn_anchor,
+                x=bmark_x, xanchor=bmark_xanchor,
                 y=bmark_btn_y, yanchor="top",
                 active=1,   # Weekly Median is the default
                 buttons=[
                     dict(label="Weekly Average", method="update",
                          args=[
                              {"visible": _bench_vis(avg_indices)},
-                             {
-                                 f"annotations[{_avg_sidx[0]}].font.color": "#333",
-                                 f"annotations[{_med_sidx[0]}].font.color": "rgba(0,0,0,0)",
-                             },
+                             {f"annotations[{avg_idx}].font.color": "#333",
+                              f"annotations[{med_idx}].font.color": "rgba(0,0,0,0)"},
                          ]),
                     dict(label="Weekly Median", method="update",
                          args=[
                              {"visible": _bench_vis(med_indices)},
-                             {
-                                 f"annotations[{_avg_sidx[0]}].font.color": "rgba(0,0,0,0)",
-                                 f"annotations[{_med_sidx[0]}].font.color": "#333",
-                             },
+                             {f"annotations[{avg_idx}].font.color": "rgba(0,0,0,0)",
+                              f"annotations[{med_idx}].font.color": "#333"},
                          ]),
                 ],
                 showactive=True,
                 bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
             ),
         ],
-        annotations=(existing_annots + [title_annot] + label_annots
+        annotations=(existing_annots + corner_annots + label_annots
                       + [avg_summary_annot, med_summary_annot]),
-        title_text="",   # suppressed — title is an annotation above
+        title_text="",
         height=fig_h,
         template="plotly_white",
         margin=dict(t=MARGIN_T, b=MARGIN_B),
@@ -440,58 +341,137 @@ def _build_figure(df, ncols=4, league_name=""):
     return fig
 
 
+# ── HTML writer ────────────────────────────────────────────────────────────────
+
 def lucky_win_plot(df, output="lucky_wins.html", league_name=""):
-    print("  Building desktop layout (4 columns)...")
-    desktop_fig = _build_figure(df, ncols=4, league_name=league_name)
-    print("  Building mobile layout (2 columns)...")
-    mobile_fig = _build_figure(df, ncols=2, league_name=league_name)
+    """
+    Build per-season figures (only teams active that season) and write a single
+    responsive HTML file with an external season selector.
+    """
+    seasons = ["All"] + sorted(df["season"].unique().tolist())
 
+    # ── Build one desktop+mobile figure pair per season ───────────────────────
+    season_htmls = {}   # s -> {"desktop": str, "mobile": str}
     kw = dict(full_html=False, include_plotlyjs=False, config={"responsive": True})
-    desktop_div = desktop_fig.to_html(**kw)
-    mobile_div  = mobile_fig.to_html(**kw)
 
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lucky Wins — {league_name}</title>
-  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <style>
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; padding: 0; background: #fff; }}
-    .layout-wrap {{ width: 100%; }}
-  </style>
-</head>
-<body>
-  <div id="desktop-wrap" class="layout-wrap">{desktop_div}</div>
-  <div id="mobile-wrap"  class="layout-wrap" style="display:none;">{mobile_div}</div>
-  <script>
-    function applyLayout() {{
-      var mobile = window.innerWidth < 769;
-      var dw = document.getElementById('desktop-wrap');
-      var mw = document.getElementById('mobile-wrap');
-      dw.style.display = mobile ? 'none' : 'block';
-      mw.style.display = mobile ? 'block' : 'none';
-      var wrap = mobile ? mw : dw;
-      var gdiv = wrap.querySelector('.js-plotly-plot');
-      if (gdiv) Plotly.Plots.resize(gdiv);
-    }}
-    window.addEventListener('load', applyLayout);
-    window.addEventListener('resize', applyLayout);
-  </script>
-</body>
-</html>"""
+    for s in seasons:
+        df_s = df if s == "All" else df[df["season"] == s]
+        print(f"    Season {s}: {sorted(df_s['team'].unique()).__len__()} teams")
+
+        desktop_div = _build_figure(df_s, ncols=4).to_html(**kw)
+        mobile_div  = _build_figure(df_s, ncols=2).to_html(**kw)
+        season_htmls[s] = {"desktop": desktop_div, "mobile": mobile_div}
+
+    # ── Assemble HTML pieces (avoid f-string on Plotly content) ──────────────
+    # Season selector buttons
+    btn_parts = []
+    for i, s in enumerate(seasons):
+        active = " active" if i == 0 else ""
+        btn_parts.append(
+            '<button class="season-btn' + active + '" '
+            'id="btn-season-' + str(s) + '" '
+            "onclick=\"setSeason('" + str(s) + "')\">" + str(s) + "</button>"
+        )
+    season_buttons_html = "\n    ".join(btn_parts)
+
+    # Season figure divs
+    div_parts = []
+    for i, s in enumerate(seasons):
+        active   = " active" if i == 0 else ""
+        desktop  = season_htmls[s]["desktop"]
+        mobile   = season_htmls[s]["mobile"]
+        div_parts.append(
+            '<div id="season-' + str(s) + '" class="season-wrap' + active + '">\n'
+            '  <div class="layout-wrap desktop-wrap">' + desktop + '</div>\n'
+            '  <div class="layout-wrap mobile-wrap" style="display:none">' + mobile + '</div>\n'
+            '</div>'
+        )
+    season_divs_html = "\n\n".join(div_parts)
+
+    # ── Static head (f-string safe: only league_name substituted) ────────────
+    html_head = (
+        '<!DOCTYPE html>\n'
+        '<html lang="en">\n'
+        '<head>\n'
+        '  <meta charset="utf-8">\n'
+        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        '  <title>Lucky Wins — ' + league_name + '</title>\n'
+        '  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>\n'
+        '  <style>\n'
+        '    *, *::before, *::after { box-sizing: border-box; }\n'
+        '    body { margin: 0; padding: 0; background: #fff;\n'
+        '           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }\n'
+        '    #page-header { padding: 16px 20px 4px; }\n'
+        '    #page-header h2 { margin: 0 0 4px; font-size: 1.15rem; color: #1a1a2e; }\n'
+        '    #page-header p  { margin: 0; font-size: 0.8rem; color: #666; }\n'
+        '    #season-selector { padding: 8px 20px 0; display: flex; flex-wrap: wrap;\n'
+        '                       gap: 8px; align-items: center; }\n'
+        '    .season-label { font-size: 11px; font-weight: 700; color: #444;\n'
+        '                    width: 100%; margin-bottom: 2px; }\n'
+        '    .season-btn {\n'
+        '      padding: 5px 13px; font-size: 12px; cursor: pointer; border-radius: 4px;\n'
+        '      background: #f0f0f0; border: 1px solid #aaa; color: #333; white-space: nowrap;\n'
+        '    }\n'
+        '    .season-btn.active {\n'
+        '      background: #e8ecff; border-color: #667eea;\n'
+        '      font-weight: 700; color: #3730a3;\n'
+        '    }\n'
+        '    .season-wrap { display: none; width: 100%; }\n'
+        '    .season-wrap.active { display: block; }\n'
+        '    .layout-wrap { width: 100%; }\n'
+        '  </style>\n'
+        '</head>\n'
+        '<body>\n'
+        '  <div id="page-header">\n'
+        '    <h2>Lucky Wins &mdash; ' + league_name + '</h2>\n'
+        '    <p>Circles = Wins &middot; X = Losses &middot; Blue = Regular Season &middot; Red = Playoffs</p>\n'
+        '  </div>\n\n'
+        '  <div id="season-selector">\n'
+        '    <div class="season-label">Season</div>\n'
+        '    ' + season_buttons_html + '\n'
+        '  </div>\n\n'
+    )
+
+    html_script = (
+        '\n  <script>\n'
+        '    function setSeason(s) {\n'
+        '      document.querySelectorAll(".season-btn").forEach(b => b.classList.remove("active"));\n'
+        '      document.getElementById("btn-season-" + s).classList.add("active");\n'
+        '      document.querySelectorAll(".season-wrap").forEach(w => w.classList.remove("active"));\n'
+        '      document.getElementById("season-" + s).classList.add("active");\n'
+        '      applyLayout();\n'
+        '    }\n\n'
+        '    function applyLayout() {\n'
+        '      var mobile = window.innerWidth < 769;\n'
+        '      var active = document.querySelector(".season-wrap.active");\n'
+        '      if (!active) return;\n'
+        '      var dw = active.querySelector(".desktop-wrap");\n'
+        '      var mw = active.querySelector(".mobile-wrap");\n'
+        '      if (dw) dw.style.display = mobile ? "none" : "block";\n'
+        '      if (mw) mw.style.display = mobile ? "block" : "none";\n'
+        '      var wrap = mobile ? mw : dw;\n'
+        '      if (wrap) {\n'
+        '        var gdiv = wrap.querySelector(".js-plotly-plot");\n'
+        '        if (gdiv) Plotly.Plots.resize(gdiv);\n'
+        '      }\n'
+        '    }\n\n'
+        '    window.addEventListener("load", applyLayout);\n'
+        '    window.addEventListener("resize", applyLayout);\n'
+        '  </script>\n'
+        '</body>\n'
+        '</html>'
+    )
+
+    html_content = html_head + season_divs_html + html_script
 
     with open(output, "w", encoding="utf-8") as f:
         f.write(html_content)
 
     abs_path = os.path.abspath(output)
-    print(f"Saved: {abs_path}")
+    print(f"  Saved: {abs_path}")
     webbrowser.open(f"file:///{abs_path}")
 
 
 if __name__ == "__main__":
-    # Run both leagues when executed directly — same as build_all.py
     import build_all
     build_all.main(open_browser=True)
