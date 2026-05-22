@@ -135,7 +135,7 @@ def _build_figure(df, ncols=4):
         return go.Figure()
 
     nrows     = -(-len(teams) // ncols)
-    h_spacing = 0.07 if ncols >= 4 else 0.04
+    h_spacing = 0.07 if ncols >= 4 else 0.12
 
     fig = make_subplots(
         rows=nrows, cols=ncols,
@@ -226,15 +226,24 @@ def _build_figure(df, ncols=4):
     )
 
     # Mobile: axis titles only on edge subplots to prevent label collision.
-    # Y-axis: col=1 only (left chart of every row).
-    # X-axis: col=1 only, every row — mirrors y-axis so there's one label per pair.
+    # Y-axis: col=1 only (left edge of every row).
+    # X-axis: use paper-coordinate annotations centered between each pair (x=0.5).
     if ncols < 4:
         fig.update_xaxes(title_text="")
         fig.update_yaxes(title_text="")
         fig.update_yaxes(title_text="Opp pts vs median", title_font_size=9, col=1)
+        # Compute the bottom y of each row in paper coords, then annotate centered
+        sub_h = (1.0 - (nrows - 1) * 0.10) / nrows
         for row_i in range(1, nrows + 1):
-            fig.update_xaxes(title_text="Team pts vs median", title_font_size=9,
-                             row=row_i, col=1)
+            y_bottom = 1.0 - row_i * sub_h - (row_i - 1) * 0.10
+            fig.add_annotation(
+                text="Team pts vs median",
+                xref="paper", yref="paper",
+                x=0.5, y=y_bottom - 0.012,
+                xanchor="center", yanchor="top",
+                showarrow=False,
+                font=dict(size=9, color="#444"),
+            )
 
     # ── Corner watermark annotations ──────────────────────────────────────────
     LUCKY_TXT   = dict(showarrow=False, font=dict(size=11, color="rgba(31,119,180,0.60)"))
