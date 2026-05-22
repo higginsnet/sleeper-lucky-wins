@@ -151,12 +151,15 @@ def _build_figure(df, ncols=4):
 
     nrows     = -(-len(teams) // ncols)
     h_spacing = 0.07 if ncols >= 4 else 0.12
+    # More vertical space per gap when there are few rows so subplot titles
+    # don't collide with the x-axis labels of the row above.
+    v_spacing = max(0.10, round(0.36 / nrows, 3))
 
     fig = make_subplots(
         rows=nrows, cols=ncols,
         subplot_titles=teams,
         horizontal_spacing=h_spacing,
-        vertical_spacing=0.10,
+        vertical_spacing=v_spacing,
     )
 
     STYLES = [
