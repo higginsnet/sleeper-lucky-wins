@@ -239,10 +239,12 @@ def _build_figure(df, ncols=4):
 
     fig.update_xaxes(
         tickfont_size=9, title_text="Team pts vs median", title_font_size=9,
+        title_standoff=4,
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
     fig.update_yaxes(
         tickfont_size=9, title_text="Opp pts vs median", title_font_size=9,
+        title_standoff=4,
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
 
@@ -252,15 +254,17 @@ def _build_figure(df, ncols=4):
     if ncols < 4:
         fig.update_xaxes(title_text="")
         fig.update_yaxes(title_text="")
-        fig.update_yaxes(title_text="Opp pts vs median", title_font_size=9, col=1)
-        # Compute the bottom y of each row in paper coords, then annotate centered
-        sub_h = (1.0 - (nrows - 1) * 0.10) / nrows
+        fig.update_yaxes(title_text="Opp pts vs median", title_font_size=9,
+                         title_standoff=4, col=1)
+        # Compute the bottom y of each row using the actual v_spacing so the
+        # annotation tracks correctly when spacing changes with row count.
+        sub_h = (1.0 - (nrows - 1) * v_spacing) / nrows
         for row_i in range(1, nrows + 1):
-            y_bottom = 1.0 - row_i * sub_h - (row_i - 1) * 0.10
+            y_bottom = 1.0 - row_i * sub_h - (row_i - 1) * v_spacing
             fig.add_annotation(
                 text="Team pts vs median",
                 xref="paper", yref="paper",
-                x=0.5, y=y_bottom - 0.012,
+                x=0.5, y=y_bottom - 0.015,
                 xanchor="center", yanchor="top",
                 showarrow=False,
                 font=dict(size=9, color="#444"),
@@ -313,7 +317,7 @@ def _build_figure(df, ncols=4):
     )
 
     margin = (dict(t=MARGIN_T, b=MARGIN_B) if ncols >= 4
-              else dict(t=MARGIN_T, b=MARGIN_B, l=55, r=10))
+              else dict(t=MARGIN_T, b=MARGIN_B, l=45, r=25))
 
     # Keep legend a fixed 60px below the plot area regardless of figure height.
     legend_y = -60 / plot_h
