@@ -7,6 +7,8 @@ import webbrowser
 from lucky_win import (
     LEAGUES_PRETEND_GMS,
     LEAGUES_ON_THE_CLOCK,
+    LEAGUES_EMPIRE,
+    LEAGUES_2_MINUTE_DRILL,
     build_matchup_df,
     lucky_win_plot,
 )
@@ -21,6 +23,16 @@ LEAGUES_CONFIG = [
         "leagues":     LEAGUES_ON_THE_CLOCK,
         "league_name": "On the Clock Fantasy League",
         "output":      "lucky_wins_on_the_clock.html",
+    },
+    {
+        "leagues":     LEAGUES_EMPIRE,
+        "league_name": "The Empire Strikes Back",
+        "output":      "lucky_wins_empire.html",
+    },
+    {
+        "leagues":     LEAGUES_2_MINUTE_DRILL,
+        "league_name": "2 Minute Drill",
+        "output":      "lucky_wins_2_minute_drill.html",
     },
 ]
 

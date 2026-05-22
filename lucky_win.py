@@ -24,6 +24,21 @@ LEAGUES_ON_THE_CLOCK = [
     {"league_id": "1312191361411198976", "season": 2026, "playoff_week_start": 15, "last_scored_leg": 1},
 ]
 
+LEAGUES_EMPIRE = [
+    {"league_id": "1241891314337857536", "season": 2025, "playoff_week_start": 15, "last_scored_leg": 17},
+    {"league_id": "1312221661323341824", "season": 2026, "playoff_week_start": 15, "last_scored_leg": 1},
+]
+
+# Redraft league — same API structure, last_scored_leg goes to week 18 each season.
+LEAGUES_2_MINUTE_DRILL = [
+    {"league_id": "595099547647139840",  "season": 2020, "playoff_week_start": 14, "last_scored_leg": 17},
+    {"league_id": "693247414072610816",  "season": 2021, "playoff_week_start": 15, "last_scored_leg": 18},
+    {"league_id": "825083697853218816",  "season": 2022, "playoff_week_start": 15, "last_scored_leg": 18},
+    {"league_id": "970063665728700416",  "season": 2023, "playoff_week_start": 15, "last_scored_leg": 18},
+    {"league_id": "1065330758425997312", "season": 2024, "playoff_week_start": 15, "last_scored_leg": 18},
+    {"league_id": "1245955182097866752", "season": 2025, "playoff_week_start": 15, "last_scored_leg": 18},
+]
+
 
 # ── Data fetching ──────────────────────────────────────────────────────────────
 
