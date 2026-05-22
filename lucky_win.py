@@ -277,7 +277,7 @@ def _build_figure(df, ncols=4):
     # Summary annotation (single, median-based)
     _sep     = "<br>" if ncols < 4 else "    |    "
     med_text = _lucky_summary(df, "score_rel_med", "opp_rel_med", _sep)
-    summary_y = _py(55) if ncols >= 4 else _py(65)
+    summary_y = _py(40) if ncols >= 4 else _py(45)
 
     summary_annot = dict(
         xref="paper", yref="paper",
