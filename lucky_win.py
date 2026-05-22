@@ -348,7 +348,7 @@ def lucky_win_plot(df, output="lucky_wins.html", league_name=""):
         '    *, *::before, *::after { box-sizing: border-box; }\n'
         '    body { margin: 0; padding: 0; background: #fff;\n'
         '           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }\n'
-        '    #page-header { padding: 16px 20px 4px; }\n'
+        '    #page-header { padding: 16px 20px 4px; text-align: center; }\n'
         '    #page-header h2 { margin: 0 0 4px; font-size: 1.15rem; color: #1a1a2e; }\n'
         '    #page-header p  { margin: 0; font-size: 0.8rem; color: #666; }\n'
         '    #season-selector { padding: 8px 20px 0; display: flex; flex-wrap: wrap;\n'
