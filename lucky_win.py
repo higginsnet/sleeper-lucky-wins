@@ -92,20 +92,25 @@ def build_matchup_df(leagues):
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _make_hover(subset, x_col, y_col):
-    bmark = "avg" if "avg" in x_col else "median"
     return [
         f"<b>{r['team']}</b> — Wk {r['week']} {r['season']}<br>"
         f"vs {r['opp']}<br>"
         f"Score: {r['score']:.2f} – {r['opp_score']:.2f}<br>"
-        f"Team vs {bmark}: {r[x_col]:+.2f} · Opp vs {bmark}: {r[y_col]:+.2f}"
+        f"Team vs median: {r[x_col]:+.2f} · Opp vs median: {r[y_col]:+.2f}"
         for _, r in subset.iterrows()
     ]
 
 
 def _lucky_summary(fdf, xc, yc, sep="    |    "):
-    """Return a luckiest/unluckiest summary string for one benchmark."""
-    lucky   = fdf[(fdf[xc] < 0) & (fdf[yc] < 0) & (fdf[xc] > fdf[yc]) &  fdf["win"]]
-    unlucky = fdf[(fdf[xc] > 0) & (fdf[yc] > 0) & (fdf[yc] > fdf[xc]) & ~fdf["win"]]
+    """Return a luckiest/unluckiest summary string.
+
+    Lucky win  = any win  (circle) landing in a blue shaded zone  (Q1 or Q3).
+    Unlucky loss = any loss (X)    landing in a pink shaded zone  (Q1 or Q3).
+    Both Q1 (x>0, y>0) and Q3 (x<0, y<0) are counted.
+    """
+    in_q1_or_q3 = ((fdf[xc] > 0) & (fdf[yc] > 0)) | ((fdf[xc] < 0) & (fdf[yc] < 0))
+    lucky   = fdf[in_q1_or_q3 &  fdf["win"]]
+    unlucky = fdf[in_q1_or_q3 & ~fdf["win"]]
     if lucky.empty:   luckiest,   n_l = "N/A", 0
     else: c = lucky.groupby("team").size();   luckiest,   n_l = c.idxmax(), int(c.max())
     if unlucky.empty: unluckiest, n_u = "N/A", 0
@@ -155,49 +160,31 @@ def _build_figure(df, ncols=4):
             name=label, showlegend=True, legendgroup=label,
             visible="legendonly", hoverinfo="skip",
         ))
-    N_ANCHORS = len(STYLES)  # 4
 
-    # ── Data traces ──────────────────────────────────────────────────────────
-    trace_meta = []
-    avg_indices, med_indices = [], []
-
-    def _add_metric_traces(x_col, y_col, visible, index_list):
-        for i, team in enumerate(teams):
-            r, c = divmod(i, ncols)
-            tdf = df[df["team"] == team]
-            for is_playoff, win, color, symbol, label in STYLES:
-                sub = tdf[(tdf["is_playoff"] == is_playoff) & (tdf["win"] == win)]
-                if sub.empty:
-                    continue
-                fig.add_trace(
-                    go.Scatter(
-                        x=sub[x_col].tolist(), y=sub[y_col].tolist(),
-                        mode="markers",
-                        marker=dict(symbol=symbol, color=color, size=9, opacity=0.80,
-                                    line=dict(width=1.5, color="white" if win else color)),
-                        name=label, showlegend=False, legendgroup=label,
-                        visible=visible,
-                        hovertext=_make_hover(sub, x_col, y_col),
-                        hoverinfo="text",
-                    ),
-                    row=r + 1, col=c + 1,
-                )
-                index_list.append(len(fig.data) - 1)
-                trace_meta.append(dict(team=team, is_playoff=is_playoff, win=win,
-                                       x_col=x_col, y_col=y_col))
-
-    _add_metric_traces("score_rel_avg", "opp_rel_avg", False, avg_indices)  # hidden by default
-    _add_metric_traces("score_rel_med", "opp_rel_med", True,  med_indices)  # visible by default
-
-    total = len(fig.data)
-
-    def _bench_vis(show_indices):
-        show_set = set(show_indices)
-        return ["legendonly"] * N_ANCHORS + [i in show_set for i in range(N_ANCHORS, total)]
+    # ── Data traces (median only) ─────────────────────────────────────────────
+    for i, team in enumerate(teams):
+        r, c = divmod(i, ncols)
+        tdf = df[df["team"] == team]
+        for is_playoff, win, color, symbol, label in STYLES:
+            sub = tdf[(tdf["is_playoff"] == is_playoff) & (tdf["win"] == win)]
+            if sub.empty:
+                continue
+            fig.add_trace(
+                go.Scatter(
+                    x=sub["score_rel_med"].tolist(), y=sub["opp_rel_med"].tolist(),
+                    mode="markers",
+                    marker=dict(symbol=symbol, color=color, size=9, opacity=0.80,
+                                line=dict(width=1.5, color="white" if win else color)),
+                    name=label, showlegend=False, legendgroup=label,
+                    hovertext=_make_hover(sub, "score_rel_med", "opp_rel_med"),
+                    hoverinfo="text",
+                ),
+                row=r + 1, col=c + 1,
+            )
 
     # ── Background fills + diagonal + zero-lines (per subplot) ───────────────
     max_val = (
-        df[["score_rel_avg", "opp_rel_avg", "score_rel_med", "opp_rel_med"]]
+        df[["score_rel_med", "opp_rel_med"]]
         .abs().values.max() * 1.15
     )
     R = max_val
@@ -230,20 +217,20 @@ def _build_figure(df, ncols=4):
         fig.add_vline(x=0, line_dash="dot", line_color="#bbb", line_width=0.8, row=r+1, col=c+1)
 
     fig.update_xaxes(
-        tickfont_size=9, title_text="Team pts vs benchmark", title_font_size=9,
+        tickfont_size=9, title_text="Team pts vs median", title_font_size=9,
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
     fig.update_yaxes(
-        tickfont_size=9, title_text="Opp pts vs benchmark", title_font_size=9,
+        tickfont_size=9, title_text="Opp pts vs median", title_font_size=9,
         zeroline=False, range=[-max_val, max_val], tickmode="auto", nticks=6,
     )
 
     # Mobile: axis titles only on edge subplots to prevent label collision
     if ncols < 4:
         fig.update_xaxes(title_text="")
-        fig.update_xaxes(title_text="Team pts vs benchmark", title_font_size=9, row=nrows)
+        fig.update_xaxes(title_text="Team pts vs median", title_font_size=9, row=nrows)
         fig.update_yaxes(title_text="")
-        fig.update_yaxes(title_text="Opp pts vs benchmark", title_font_size=9, col=1)
+        fig.update_yaxes(title_text="Opp pts vs median", title_font_size=9, col=1)
 
     # ── Corner watermark annotations ──────────────────────────────────────────
     LUCKY_TXT   = dict(showarrow=False, font=dict(size=11, color="rgba(31,119,180,0.60)"))
@@ -263,8 +250,8 @@ def _build_figure(df, ncols=4):
 
     # ── Layout ────────────────────────────────────────────────────────────────
     # Title and season selector live in HTML above the figure; the figure only
-    # needs room for the benchmark toggle + summary.
-    MARGIN_T = 130 if ncols >= 4 else 160
+    # needs room for the summary line.
+    MARGIN_T = 80 if ncols >= 4 else 90
     MARGIN_B = 90
     fig_h    = 310 * nrows
     plot_h   = fig_h - MARGIN_T - MARGIN_B
@@ -274,60 +261,20 @@ def _build_figure(df, ncols=4):
 
     existing_annots = list(fig.layout.annotations)
 
-    # Benchmark label + summary (sep differs by layout)
-    _sep = "<br>" if ncols < 4 else "    |    "
-    avg_text = _lucky_summary(df, "score_rel_avg", "opp_rel_avg", _sep)
+    # Summary annotation (single, median-based)
+    _sep     = "<br>" if ncols < 4 else "    |    "
     med_text = _lucky_summary(df, "score_rel_med", "opp_rel_med", _sep)
+    summary_y = _py(55) if ncols >= 4 else _py(65)
 
-    bmark_x       = 1.0    if ncols >= 4 else 0.5
-    bmark_xanchor = "right" if ncols >= 4 else "center"
-    summary_y     = _py(100) if ncols >= 4 else _py(115)
-
-    label_annots = [
-        dict(text="<b>Benchmark</b>", xref="paper", yref="paper",
-             x=bmark_x, y=_py(20), xanchor=bmark_xanchor, yanchor="bottom",
-             showarrow=False, font=dict(size=11, color="#444")),
-    ]
-    _summary_base = dict(xref="paper", yref="paper",
-                         x=0.5, y=summary_y, xanchor="center", yanchor="bottom",
-                         showarrow=False)
-    avg_summary_annot = dict(**_summary_base, text=avg_text,
-                             font=dict(size=11, color="rgba(0,0,0,0)"))  # hidden
-    med_summary_annot = dict(**_summary_base, text=med_text,
-                             font=dict(size=11, color="#333"))            # visible
-
-    avg_idx = len(existing_annots) + len(corner_annots) + len(label_annots)
-    med_idx = avg_idx + 1
-
-    bmark_btn_y = _py(32)
+    summary_annot = dict(
+        xref="paper", yref="paper",
+        x=0.5, y=summary_y, xanchor="center", yanchor="bottom",
+        showarrow=False, text=med_text,
+        font=dict(size=11, color="#333"),
+    )
 
     fig.update_layout(
-        updatemenus=[
-            dict(
-                type="buttons", direction="right",
-                x=bmark_x, xanchor=bmark_xanchor,
-                y=bmark_btn_y, yanchor="top",
-                active=1,   # Weekly Median is the default
-                buttons=[
-                    dict(label="Weekly Average", method="update",
-                         args=[
-                             {"visible": _bench_vis(avg_indices)},
-                             {f"annotations[{avg_idx}].font.color": "#333",
-                              f"annotations[{med_idx}].font.color": "rgba(0,0,0,0)"},
-                         ]),
-                    dict(label="Weekly Median", method="update",
-                         args=[
-                             {"visible": _bench_vis(med_indices)},
-                             {f"annotations[{avg_idx}].font.color": "rgba(0,0,0,0)",
-                              f"annotations[{med_idx}].font.color": "#333"},
-                         ]),
-                ],
-                showactive=True,
-                bgcolor="#f0f0f0", bordercolor="#aaa", font_size=12,
-            ),
-        ],
-        annotations=(existing_annots + corner_annots + label_annots
-                      + [avg_summary_annot, med_summary_annot]),
+        annotations=(existing_annots + corner_annots + [summary_annot]),
         title_text="",
         height=fig_h,
         template="plotly_white",
@@ -405,9 +352,9 @@ def lucky_win_plot(df, output="lucky_wins.html", league_name=""):
         '    #page-header h2 { margin: 0 0 4px; font-size: 1.15rem; color: #1a1a2e; }\n'
         '    #page-header p  { margin: 0; font-size: 0.8rem; color: #666; }\n'
         '    #season-selector { padding: 8px 20px 0; display: flex; flex-wrap: wrap;\n'
-        '                       gap: 8px; align-items: center; }\n'
+        '                       gap: 8px; align-items: center; justify-content: center; }\n'
         '    .season-label { font-size: 11px; font-weight: 700; color: #444;\n'
-        '                    width: 100%; margin-bottom: 2px; }\n'
+        '                    width: 100%; margin-bottom: 2px; text-align: center; }\n'
         '    .season-btn {\n'
         '      padding: 5px 13px; font-size: 12px; cursor: pointer; border-radius: 4px;\n'
         '      background: #f0f0f0; border: 1px solid #aaa; color: #333; white-space: nowrap;\n'
