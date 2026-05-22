@@ -306,6 +306,9 @@ def _build_figure(df, ncols=4):
     margin = (dict(t=MARGIN_T, b=MARGIN_B) if ncols >= 4
               else dict(t=MARGIN_T, b=MARGIN_B, l=55, r=10))
 
+    # Keep legend a fixed 60px below the plot area regardless of figure height.
+    legend_y = -60 / plot_h
+
     fig.update_layout(
         annotations=(existing_annots + corner_annots + [summary_annot]),
         title_text="",
@@ -313,7 +316,7 @@ def _build_figure(df, ncols=4):
         template="plotly_white",
         margin=margin,
         legend=dict(
-            orientation="h", yanchor="top", y=-0.05,
+            orientation="h", yanchor="top", y=legend_y,
             xanchor="center", x=0.5, font_size=12,
         ),
     )
